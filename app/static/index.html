@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bubble Tracker</title>
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --card: #ffffff;
+        --text: #1a2433;
+        --muted: #576273;
+        --accent: #0b6bcb;
+        --danger: #c73030;
+        --ok: #1d8f4f;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(circle at top right, #dbe8ff, #f5f7fb 40%);
+        color: var(--text);
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      h1 {
+        margin: 0 0 8px;
+      }
+      .sub {
+        color: var(--muted);
+        margin-bottom: 16px;
+      }
+      .grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+      .card {
+        background: var(--card);
+        border-radius: 12px;
+        box-shadow: 0 6px 20px rgba(24, 39, 75, 0.1);
+        padding: 14px;
+      }
+      .value {
+        font-size: 1.6rem;
+        font-weight: 700;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 4px;
+      }
+      .ok {
+        color: var(--ok);
+      }
+      .bad {
+        color: var(--danger);
+      }
+      .line {
+        height: 48px;
+        width: 100%;
+        margin-top: 8px;
+      }
+      .footer {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Bubble Tracker</h1>
+      <div class="sub">Live snapshot from Postgres. Auto-refresh every 30 seconds.</div>
+      <div id="status" class="sub">Loading...</div>
+      <div class="grid" id="cards"></div>
+      <div class="footer">API: <code>/latest</code> and <code>/metrics/{metric}</code></div>
+    </div>
+
+    <script>
+      const cards = document.getElementById("cards");
+      const status = document.getElementById("status");
+
+      function miniSparkline(values) {
+        if (!values.length) return "";
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const span = max - min || 1;
+        const points = values
+          .map((v, i) => `${(i / (values.length - 1 || 1)) * 100},${48 - ((v - min) / span) * 48}`)
+          .join(" ");
+        return `<svg class="line" viewBox="0 0 100 48" preserveAspectRatio="none"><polyline fill="none" stroke="#0b6bcb" stroke-width="2" points="${points}"/></svg>`;
+      }
+
+      async function fetchSeries(metric, field) {
+        const r = await fetch(`/metrics/${metric}`);
+        if (!r.ok) return [];
+        const rows = await r.json();
+        return rows.slice(-20).map((x) => Number(x[field])).filter((v) => !Number.isNaN(v));
+      }
+
+      async function render() {
+        try {
+          const r = await fetch("/latest");
+          if (!r.ok) throw new Error("API unavailable");
+          const data = await r.json();
+
+          const deviationSeries = await fetchSeries("deviation", "deviation_pct");
+          const sentimentSeries = await fetchSeries("sentiment", "fear_greed_score");
+          const liquiditySeries = await fetchSeries("liquidity", "rrp_billions");
+          const ipoSeries = await fetchSeries("ipo_heat", "vol_heat_ratio");
+
+          const items = [
+            {
+              title: "Nasdaq Deviation",
+              value: data.deviation ? `${data.deviation.deviation_pct.toFixed(2)}%` : "No data",
+              meta: data.deviation ? `Date: ${data.deviation.date}` : "Run worker once",
+              cls: data.deviation && data.deviation.deviation_pct > 15 ? "bad" : "ok",
+              spark: miniSparkline(deviationSeries),
+            },
+            {
+              title: "Fear & Greed",
+              value: data.sentiment ? `${Math.round(data.sentiment.fear_greed_score)} / 100` : "No data",
+              meta: data.sentiment ? `${data.sentiment.rating} (${data.sentiment.date})` : "Run worker once",
+              cls: "",
+              spark: miniSparkline(sentimentSeries),
+            },
+            {
+              title: "Reverse Repo",
+              value: data.liquidity ? `${Math.round(data.liquidity.rrp_billions)}B` : "No data",
+              meta: data.liquidity ? `TGA: ${Math.round(data.liquidity.tga_billions)}B` : "Run worker once",
+              cls: "",
+              spark: miniSparkline(liquiditySeries),
+            },
+            {
+              title: "IPO Heat",
+              value: data.ipo_heat ? `${data.ipo_heat.vol_heat_ratio.toFixed(2)}x` : "No data",
+              meta: data.ipo_heat ? `Date: ${data.ipo_heat.date}` : "Run worker once",
+              cls: data.ipo_heat && data.ipo_heat.vol_heat_ratio > 2 ? "bad" : "ok",
+              spark: miniSparkline(ipoSeries),
+            },
+          ];
+
+          cards.innerHTML = items
+            .map(
+              (x) => `
+              <div class="card">
+                <div>${x.title}</div>
+                <div class="value ${x.cls}">${x.value}</div>
+                <div class="meta">${x.meta}</div>
+                ${x.spark}
+              </div>
+            `,
+            )
+            .join("");
+
+          status.textContent = `Last refresh: ${new Date().toLocaleString()}`;
+        } catch (err) {
+          status.textContent = `Error: ${err.message}`;
+        }
+      }
+
+      render();
+      setInterval(render, 30000);
+    </script>
+  </body>
+</html>

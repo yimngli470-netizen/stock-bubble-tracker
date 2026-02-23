@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bubble_db
+    environment:
+      POSTGRES_DB: bubble_tracker
+      POSTGRES_USER: bubble
+      POSTGRES_PASSWORD: bubble
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bubble -d bubble_tracker"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bubble_api
+    command: uvicorn app.api:app --host 0.0.0.0 --port 8080
+    environment:
+      DATABASE_URL: postgresql://bubble:bubble@db:5432/bubble_tracker
+      TZ: America/Los_Angeles
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bubble_worker
+    command: python -m app.worker
+    environment:
+      DATABASE_URL: postgresql://bubble:bubble@db:5432/bubble_tracker
+      TZ: America/Los_Angeles
+      SCHEDULE_TZ: America/Los_Angeles
+      SCHEDULE_HOUR: "13"
+      SCHEDULE_MINUTE: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pg_data:

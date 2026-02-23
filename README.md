@@ -1,18 +1,90 @@
-# 📉 Market Risk Dashboard
+# Bubble Tracker (Container First)
 
-A personal financial tracker that monitors "bubble indicators" in the stock market. It aggregates data from Yahoo Finance, FRED (Federal Reserve), and CNN to visualize market risk in real-time.
+This project runs a local bubble-tracker stack with:
 
-## 📊 Indicators Tracked
-1.  **Nasdaq 100 Deviation:** Measures how "overextended" the price is vs. the 200-day average.
-2.  **Fed Liquidity:** Tracks Reverse Repo (RRP) and Treasury General Account (TGA) levels.
-3.  **Market Sentiment:** Tracks the CNN Fear & Greed Index (0-100).
-4.  **IPO Heat:** Monitors volume spikes in the IPO market using ETF proxies.
+- `api` (FastAPI) on `http://localhost:8080`
+- `db` (PostgreSQL)
+- `worker` (daily async data collection at 1:00 PM America/Los_Angeles)
 
----
+The worker also does a startup catch-up run if today's data is missing.
 
-## 🚀 Setup & Installation
+## 1. Install Docker on macOS
 
-**1. Clone the repository**
+1. Install Docker Desktop for Mac: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
+2. Open Docker Desktop and wait until it shows "Engine running".
+3. Verify from terminal:
+
 ```bash
-git clone [https://github.com/YOUR_USERNAME/daily-finance-tracker.git](https://github.com/YOUR_USERNAME/daily-finance-tracker.git)
-cd daily-finance-tracker
+docker --version
+docker compose version
+```
+
+## 2. Start the stack
+
+From this repo root:
+
+```bash
+docker compose up -d --build
+```
+
+Check status:
+
+```bash
+docker compose ps
+docker compose logs -f worker
+```
+
+Open the website:
+
+- [http://localhost:8080](http://localhost:8080)
+
+Health check:
+
+```bash
+curl http://localhost:8080/health
+```
+
+## 3. Daily schedule
+
+- The worker runs every day at **13:00 America/Los_Angeles**.
+- Config lives in `docker-compose.yml` env vars:
+  - `SCHEDULE_TZ`
+  - `SCHEDULE_HOUR`
+  - `SCHEDULE_MINUTE`
+
+## 4. Manual data jobs
+
+Run one-time collection inside the worker container:
+
+```bash
+docker compose exec worker python collector.py
+```
+
+Run one-time backfill:
+
+```bash
+docker compose exec worker python backfill.py
+```
+
+## 5. Stop / restart
+
+```bash
+docker compose stop
+docker compose start
+```
+
+Reset DB volume:
+
+```bash
+docker compose down -v
+```
+
+## API quick reference
+
+- `GET /health`
+- `GET /latest`
+- `GET /metrics`
+- `GET /metrics/deviation`
+- `GET /metrics/liquidity`
+- `GET /metrics/sentiment`
+- `GET /metrics/ipo_heat`

@@ -1,0 +1,8 @@
+APScheduler==3.11.0
+fastapi==0.116.1
+pandas==2.3.1
+pandas-datareader==0.10.0
+psycopg[binary]==3.2.9
+requests==2.32.4
+uvicorn[standard]==0.35.0
+yfinance==0.2.65
