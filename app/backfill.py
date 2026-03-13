@@ -97,10 +97,75 @@ def backfill_ipo() -> int:
     return count
 
 
+def backfill_valuation() -> int:
+    """Backfill valuation data (PE ratios)"""
+    # Note: yfinance doesn't provide historical PE ratios easily
+    # For demo purposes, we'll just set today's value
+    # In production, you'd use a financial data API with historical PE data
+    spy = yf.Ticker("SPY")
+    spy_info = spy.info
+    spy_pe = spy_info.get("trailingPE", None)
+
+    qqq = yf.Ticker("QQQ")
+    qqq_info = qqq.info
+    qqq_pe = qqq_info.get("trailingPE", None)
+
+    if not spy_pe:
+        return 0
+
+    spy_pe_deviation = ((spy_pe - 16) / 16) * 100
+
+    query = """
+        INSERT INTO track_valuation (date, spy_pe, qqq_pe, spy_pe_deviation_pct)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (date) DO UPDATE
+        SET spy_pe = EXCLUDED.spy_pe,
+            qqq_pe = EXCLUDED.qqq_pe,
+            spy_pe_deviation_pct = EXCLUDED.spy_pe_deviation_pct
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (datetime.now().date(), spy_pe, qqq_pe, spy_pe_deviation))
+        conn.commit()
+
+    return 1
+
+
+def backfill_volatility() -> int:
+    """Backfill VIX data for last year"""
+    vix = yf.Ticker("^VIX").history(period="1y")
+    vix["sma_20"] = vix["Close"].rolling(window=20).mean()
+
+    query = """
+        INSERT INTO track_volatility (date, vix_level, vix_sma_20)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (date) DO UPDATE
+        SET vix_level = EXCLUDED.vix_level,
+            vix_sma_20 = EXCLUDED.vix_sma_20
+    """
+
+    count = 0
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            for date, row in vix.iterrows():
+                vix_sma = row["sma_20"] if pd.notna(row["sma_20"]) else None
+                cur.execute(
+                    query,
+                    (date.date(), float(row["Close"]), vix_sma),
+                )
+                count += 1
+        conn.commit()
+
+    return count
+
+
 def run_backfill() -> dict[str, int]:
     init_tables()
     return {
         "deviation_days": backfill_deviation(),
         "liquidity_days": backfill_liquidity(),
         "ipo_days": backfill_ipo(),
+        "valuation_days": backfill_valuation(),
+        "volatility_days": backfill_volatility(),
     }

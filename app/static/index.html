@@ -65,9 +65,13 @@
         color: var(--danger);
       }
       .line {
-        height: 48px;
+        height: 100px;
         width: 100%;
         margin-top: 8px;
+        position: relative;
+      }
+      canvas {
+        max-height: 100px;
       }
       .footer {
         margin-top: 12px;
@@ -85,26 +89,79 @@
       <div class="footer">API: <code>/latest</code> and <code>/metrics/{metric}</code></div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
       const cards = document.getElementById("cards");
       const status = document.getElementById("status");
-
-      function miniSparkline(values) {
-        if (!values.length) return "";
-        const min = Math.min(...values);
-        const max = Math.max(...values);
-        const span = max - min || 1;
-        const points = values
-          .map((v, i) => `${(i / (values.length - 1 || 1)) * 100},${48 - ((v - min) / span) * 48}`)
-          .join(" ");
-        return `<svg class="line" viewBox="0 0 100 48" preserveAspectRatio="none"><polyline fill="none" stroke="#0b6bcb" stroke-width="2" points="${points}"/></svg>`;
-      }
+      let chartInstances = {};
 
       async function fetchSeries(metric, field) {
         const r = await fetch(`/metrics/${metric}`);
-        if (!r.ok) return [];
+        if (!r.ok) return { dates: [], values: [] };
         const rows = await r.json();
-        return rows.slice(-20).map((x) => Number(x[field])).filter((v) => !Number.isNaN(v));
+        const last30 = rows.slice(-30);
+        return {
+          dates: last30.map(x => x.date),
+          values: last30.map((x) => Number(x[field])).filter((v) => !Number.isNaN(v))
+        };
+      }
+
+      function createChart(canvasId, data, label, color = '#0b6bcb') {
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+        
+        // Destroy existing chart
+        if (chartInstances[canvasId]) {
+          chartInstances[canvasId].destroy();
+        }
+
+        if (!data.values.length) {
+          ctx.parentElement.innerHTML = '<div style="text-align:center;padding:20px;color:#999;">No historical data yet</div>';
+          return;
+        }
+
+        chartInstances[canvasId] = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: data.dates,
+            datasets: [{
+              label: label,
+              data: data.values,
+              borderColor: color,
+              backgroundColor: color + '20',
+              tension: 0.3,
+              fill: true,
+              pointRadius: 2,
+              pointHoverRadius: 4,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                mode: 'index',
+                intersect: false,
+              }
+            },
+            scales: {
+              x: {
+                display: false,
+              },
+              y: {
+                display: true,
+                grid: { color: '#f0f0f0' },
+                ticks: { font: { size: 10 } }
+              }
+            },
+            interaction: {
+              mode: 'nearest',
+              axis: 'x',
+              intersect: false
+            }
+          }
+        });
       }
 
       async function render() {
@@ -127,7 +184,8 @@
               meta: data.deviation ? `Date: ${data.deviation.date}` : "Run worker once",
               desc: "NASDAQ-100 deviation from 200-day moving average. >15% signals overheating.",
               cls: data.deviation && data.deviation.deviation_pct > 15 ? "bad" : "ok",
-              spark: miniSparkline(deviationSeries),
+              chartData: deviationSeries,
+              chartColor: '#0b6bcb',
             },
             {
               title: "Fear & Greed",
@@ -135,7 +193,8 @@
               meta: data.sentiment ? `${data.sentiment.rating} (${data.sentiment.date})` : "CNN API blocked (418)",
               desc: "CNN Fear & Greed Index. <25 = extreme fear, >75 = extreme greed.",
               cls: "",
-              spark: miniSparkline(sentimentSeries),
+              chartData: sentimentSeries,
+              chartColor: '#c73030',
             },
             {
               title: "Fed Liquidity",
@@ -143,7 +202,8 @@
               meta: data.liquidity ? `TGA: ${Math.round(data.liquidity.tga_billions)}B` : "Run worker once",
               desc: "Reverse Repo + Treasury General Account. Low RRP = more liquidity flooding markets.",
               cls: "",
-              spark: miniSparkline(liquiditySeries),
+              chartData: liquiditySeries,
+              chartColor: '#1d8f4f',
             },
             {
               title: "IPO Heat",
@@ -151,7 +211,8 @@
               meta: data.ipo_heat ? `Date: ${data.ipo_heat.date}` : "Run worker once",
               desc: "IPO ETF volume ratio vs 5-day average. >2x signals speculative frenzy.",
               cls: data.ipo_heat && data.ipo_heat.vol_heat_ratio > 2 ? "bad" : "ok",
-              spark: miniSparkline(ipoSeries),
+              chartData: ipoSeries,
+              chartColor: '#ff6b35',
             },
             {
               title: "Valuation (P/E)",
@@ -163,7 +224,8 @@
                 : "Run worker once",
               desc: "Price-to-earnings ratios. Historical S&P 500 average is ~16. High P/E = expensive.",
               cls: data.valuation && data.valuation.spy_pe_deviation_pct > 50 ? "bad" : "ok",
-              spark: miniSparkline(valuationSeries),
+              chartData: valuationSeries,
+              chartColor: '#9333ea',
             },
             {
               title: "VIX (Volatility)",
@@ -177,23 +239,31 @@
                   : "Run worker once",
               desc: "VIX fear index. <12 = complacency risk, >30 = panic/crash mode.",
               cls: data.volatility && data.volatility.vix_level < 12 ? "bad" : "ok",
-              spark: miniSparkline(volatilitySeries),
+              chartData: volatilitySeries,
+              chartColor: '#ea580c',
             },
           ];
 
           cards.innerHTML = items
             .map(
-              (x) => `
+              (x, i) => `
               <div class="card">
                 <div>${x.title}</div>
                 <div class="value ${x.cls}">${x.value}</div>
                 <div class="meta">${x.meta}</div>
                 ${x.desc ? `<div class="desc">${x.desc}</div>` : ''}
-                ${x.spark}
+                <div class="line">
+                  <canvas id="chart-${i}"></canvas>
+                </div>
               </div>
             `,
             )
             .join("");
+
+          // Create charts after DOM is ready
+          items.forEach((item, i) => {
+            createChart(`chart-${i}`, item.chartData, item.title, item.chartColor || '#0b6bcb');
+          });
 
           status.textContent = `Last refresh: ${new Date().toLocaleString()}`;
         } catch (err) {
