@@ -111,6 +111,8 @@
           const sentimentSeries = await fetchSeries("sentiment", "fear_greed_score");
           const liquiditySeries = await fetchSeries("liquidity", "rrp_billions");
           const ipoSeries = await fetchSeries("ipo_heat", "vol_heat_ratio");
+          const valuationSeries = await fetchSeries("valuation", "spy_pe_deviation_pct");
+          const volatilitySeries = await fetchSeries("volatility", "vix_level");
 
           const items = [
             {
@@ -140,6 +142,20 @@
               meta: data.ipo_heat ? `Date: ${data.ipo_heat.date}` : "Run worker once",
               cls: data.ipo_heat && data.ipo_heat.vol_heat_ratio > 2 ? "bad" : "ok",
               spark: miniSparkline(ipoSeries),
+            },
+            {
+              title: "Valuation (P/E)",
+              value: data.valuation ? `SPY ${data.valuation.spy_pe.toFixed(1)} / QQQ ${data.valuation.qqq_pe.toFixed(1)}` : "No data",
+              meta: data.valuation ? `${data.valuation.spy_pe_deviation_pct > 0 ? '+' : ''}${data.valuation.spy_pe_deviation_pct.toFixed(1)}% vs hist avg` : "Run worker once",
+              cls: data.valuation && data.valuation.spy_pe_deviation_pct > 50 ? "bad" : "ok",
+              spark: miniSparkline(valuationSeries),
+            },
+            {
+              title: "VIX (Volatility)",
+              value: data.volatility ? `${data.volatility.vix_level.toFixed(1)}` : "No data",
+              meta: data.volatility ? `20-day avg: ${data.volatility.vix_sma_20.toFixed(1)}` : "Run worker once",
+              cls: data.volatility && data.volatility.vix_level < 12 ? "bad" : "ok",
+              spark: miniSparkline(volatilitySeries),
             },
           ];
 
