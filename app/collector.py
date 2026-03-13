@@ -56,7 +56,13 @@ def run_liquidity(run_date: datetime | None = None) -> None:
 
 def run_sentiment(run_date: datetime | None = None) -> None:
     url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
-    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://edition.cnn.com/",
+    }
+    response = requests.get(url, headers=headers, timeout=20)
     response.raise_for_status()
 
     data = response.json()
