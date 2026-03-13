@@ -52,6 +52,12 @@
         font-size: 0.9rem;
         margin-top: 4px;
       }
+      .desc {
+        color: var(--muted);
+        font-size: 0.82rem;
+        margin-top: 6px;
+        line-height: 1.4;
+      }
       .ok {
         color: var(--ok);
       }
@@ -119,20 +125,23 @@
               title: "Nasdaq Deviation",
               value: data.deviation ? `${data.deviation.deviation_pct.toFixed(2)}%` : "No data",
               meta: data.deviation ? `Date: ${data.deviation.date}` : "Run worker once",
+              desc: "NASDAQ-100 deviation from 200-day moving average. >15% signals overheating.",
               cls: data.deviation && data.deviation.deviation_pct > 15 ? "bad" : "ok",
               spark: miniSparkline(deviationSeries),
             },
             {
               title: "Fear & Greed",
               value: data.sentiment ? `${Math.round(data.sentiment.fear_greed_score)} / 100` : "No data",
-              meta: data.sentiment ? `${data.sentiment.rating} (${data.sentiment.date})` : "Run worker once",
+              meta: data.sentiment ? `${data.sentiment.rating} (${data.sentiment.date})` : "CNN API blocked (418)",
+              desc: "CNN Fear & Greed Index. <25 = extreme fear, >75 = extreme greed.",
               cls: "",
               spark: miniSparkline(sentimentSeries),
             },
             {
-              title: "Reverse Repo",
-              value: data.liquidity ? `${Math.round(data.liquidity.rrp_billions)}B` : "No data",
+              title: "Fed Liquidity",
+              value: data.liquidity ? `RRP ${Math.round(data.liquidity.rrp_billions)}B` : "No data",
               meta: data.liquidity ? `TGA: ${Math.round(data.liquidity.tga_billions)}B` : "Run worker once",
+              desc: "Reverse Repo + Treasury General Account. Low RRP = more liquidity flooding markets.",
               cls: "",
               spark: miniSparkline(liquiditySeries),
             },
@@ -140,6 +149,7 @@
               title: "IPO Heat",
               value: data.ipo_heat ? `${data.ipo_heat.vol_heat_ratio.toFixed(2)}x` : "No data",
               meta: data.ipo_heat ? `Date: ${data.ipo_heat.date}` : "Run worker once",
+              desc: "IPO ETF volume ratio vs 5-day average. >2x signals speculative frenzy.",
               cls: data.ipo_heat && data.ipo_heat.vol_heat_ratio > 2 ? "bad" : "ok",
               spark: miniSparkline(ipoSeries),
             },
@@ -151,6 +161,7 @@
               meta: data.valuation && data.valuation.spy_pe_deviation_pct != null
                 ? `${data.valuation.spy_pe_deviation_pct > 0 ? '+' : ''}${data.valuation.spy_pe_deviation_pct.toFixed(1)}% vs hist avg` 
                 : "Run worker once",
+              desc: "Price-to-earnings ratios. Historical S&P 500 average is ~16. High P/E = expensive.",
               cls: data.valuation && data.valuation.spy_pe_deviation_pct > 50 ? "bad" : "ok",
               spark: miniSparkline(valuationSeries),
             },
@@ -164,6 +175,7 @@
                 : data.volatility 
                   ? `Date: ${data.volatility.date}` 
                   : "Run worker once",
+              desc: "VIX fear index. <12 = complacency risk, >30 = panic/crash mode.",
               cls: data.volatility && data.volatility.vix_level < 12 ? "bad" : "ok",
               spark: miniSparkline(volatilitySeries),
             },
@@ -176,6 +188,7 @@
                 <div>${x.title}</div>
                 <div class="value ${x.cls}">${x.value}</div>
                 <div class="meta">${x.meta}</div>
+                ${x.desc ? `<div class="desc">${x.desc}</div>` : ''}
                 ${x.spark}
               </div>
             `,
