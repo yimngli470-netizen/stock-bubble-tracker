@@ -12,6 +12,8 @@ TABLES = {
     "liquidity": "track_liquidity",
     "sentiment": "track_sentiment",
     "ipo_heat": "track_ipo_heat",
+    "valuation": "track_valuation",
+    "volatility": "track_volatility",
 }
 
 

@@ -84,7 +84,9 @@ docker compose down -v
 - `GET /health`
 - `GET /latest`
 - `GET /metrics`
-- `GET /metrics/deviation`
-- `GET /metrics/liquidity`
-- `GET /metrics/sentiment`
-- `GET /metrics/ipo_heat`
+- `GET /metrics/deviation` - NASDAQ-100 deviation from 200-day SMA
+- `GET /metrics/liquidity` - Fed liquidity (RRP + TGA)
+- `GET /metrics/sentiment` - CNN Fear & Greed Index
+- `GET /metrics/ipo_heat` - IPO ETF activity
+- `GET /metrics/valuation` - S&P 500 and NASDAQ PE ratios
+- `GET /metrics/volatility` - VIX fear index

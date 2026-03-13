@@ -98,6 +98,56 @@ def run_ipo_heat(run_date: datetime | None = None) -> None:
         conn.commit()
 
 
+def run_valuation(run_date: datetime | None = None) -> None:
+    """Track S&P 500 and NASDAQ PE ratios"""
+    spy = yf.Ticker("SPY")
+    spy_info = spy.info
+    spy_pe = spy_info.get("trailingPE", None)
+
+    qqq = yf.Ticker("QQQ")
+    qqq_info = qqq.info
+    qqq_pe = qqq_info.get("trailingPE", None)
+
+    # Historical average PE for S&P 500 is ~16
+    spy_pe_deviation = ((spy_pe - 16) / 16) * 100 if spy_pe else None
+
+    date_value = (run_date or datetime.now()).date()
+    query = """
+        INSERT INTO track_valuation (date, spy_pe, qqq_pe, spy_pe_deviation_pct)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (date) DO UPDATE
+        SET spy_pe = EXCLUDED.spy_pe,
+            qqq_pe = EXCLUDED.qqq_pe,
+            spy_pe_deviation_pct = EXCLUDED.spy_pe_deviation_pct
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (date_value, spy_pe, qqq_pe, spy_pe_deviation))
+        conn.commit()
+
+
+def run_volatility(run_date: datetime | None = None) -> None:
+    """Track VIX (fear index) and its moving average"""
+    vix = yf.Ticker("^VIX").history(period="1mo")
+    current_vix = float(vix["Close"].iloc[-1])
+    vix_sma_20 = float(vix["Close"].rolling(window=20).mean().iloc[-1])
+
+    date_value = (run_date or datetime.now()).date()
+    query = """
+        INSERT INTO track_volatility (date, vix_level, vix_sma_20)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (date) DO UPDATE
+        SET vix_level = EXCLUDED.vix_level,
+            vix_sma_20 = EXCLUDED.vix_sma_20
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (date_value, current_vix, vix_sma_20))
+        conn.commit()
+
+
 def run_all() -> None:
     init_tables()
     jobs = [
@@ -105,6 +155,8 @@ def run_all() -> None:
         ("liquidity", run_liquidity),
         ("sentiment", run_sentiment),
         ("ipo_heat", run_ipo_heat),
+        ("valuation", run_valuation),
+        ("volatility", run_volatility),
     ]
 
     for name, job in jobs:

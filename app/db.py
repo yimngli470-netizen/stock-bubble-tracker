@@ -47,6 +47,21 @@ def init_tables():
             vol_heat_ratio DOUBLE PRECISION
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS track_valuation (
+            date DATE PRIMARY KEY,
+            spy_pe DOUBLE PRECISION,
+            qqq_pe DOUBLE PRECISION,
+            spy_pe_deviation_pct DOUBLE PRECISION
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS track_volatility (
+            date DATE PRIMARY KEY,
+            vix_level DOUBLE PRECISION,
+            vix_sma_20 DOUBLE PRECISION
+        )
+        """,
     ]
 
     with get_conn() as conn:
