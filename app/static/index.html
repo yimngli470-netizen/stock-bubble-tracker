@@ -102,7 +102,7 @@
         const last30 = rows.slice(-30);
         return {
           dates: last30.map(x => x.date),
-          values: last30.map((x) => Number(x[field])).filter((v) => !Number.isNaN(v))
+          values: last30.map((x) => { const v = Number(x[field]); return Number.isNaN(v) ? null : v; })
         };
       }
 
@@ -133,6 +133,7 @@
               fill: true,
               pointRadius: 2,
               pointHoverRadius: 4,
+              spanGaps: false,
             }]
           },
           options: {
