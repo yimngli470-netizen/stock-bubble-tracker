@@ -49,12 +49,18 @@ def get_missing_dates(lookback_days: int) -> list[str]:
 
 
 def collect_job() -> None:
-    LOGGER.info("Running daily collection job")
+    """Collect today's data if not already present."""
+    tz = ZoneInfo(SCHEDULE_TZ)
+    today = datetime.now(tz).date().isoformat()
+    if has_data_for_date(today):
+        LOGGER.info("Data already exists for today (%s), skipping", today)
+        return
+    LOGGER.info("Collecting data for %s", today)
     try:
         run_all()
-        LOGGER.info("Collection completed")
+        LOGGER.info("Collection completed for %s", today)
     except Exception:
-        LOGGER.exception("Collection failed")
+        LOGGER.exception("Collection failed for %s", today)
 
 
 def backfill_missing_data() -> None:
@@ -97,18 +103,20 @@ def run_scheduler() -> None:
     else:
         LOGGER.info("Data already exists for today (%s)", today)
 
+    check_interval = int(os.getenv("CHECK_INTERVAL_MINUTES", "30"))
+
     scheduler = BlockingScheduler(timezone=tz)
     scheduler.add_job(
         collect_job,
-        CronTrigger(hour=SCHEDULE_HOUR, minute=SCHEDULE_MINUTE, timezone=tz),
-        id="daily_collection",
+        "interval",
+        minutes=check_interval,
+        id="periodic_collection",
         replace_existing=True,
     )
 
     LOGGER.info(
-        "Scheduler started: daily at %02d:%02d (%s)",
-        SCHEDULE_HOUR,
-        SCHEDULE_MINUTE,
+        "Scheduler started: checking every %d minutes (%s)",
+        check_interval,
         SCHEDULE_TZ,
     )
     scheduler.start()
