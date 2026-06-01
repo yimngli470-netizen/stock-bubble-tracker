@@ -12,23 +12,63 @@ from app.db import get_conn, init_tables
 LOGGER = logging.getLogger(__name__)
 
 
+def _latest_market_row(df, target_date):
+    if df.empty:
+        return None, None
+
+    eligible = df[df.index.date <= target_date]
+    if eligible.empty:
+        return None, None
+
+    source_date = eligible.index[-1].date()
+    return source_date, eligible.iloc[-1]
+
+
+def _is_missing_target_date(source_date, target_date, metric_name: str) -> bool:
+    if source_date == target_date:
+        return False
+
+    LOGGER.info(
+        "Skipping %s for %s; latest source observation is %s",
+        metric_name,
+        target_date,
+        source_date,
+    )
+    return True
+
+
+def _delete_stale_rows(cur, table_name: str, source_date, target_date) -> None:
+    if source_date >= target_date:
+        return
+
+    cur.execute(
+        f"DELETE FROM {table_name} WHERE date > %s AND date <= %s",
+        (source_date, target_date),
+    )
+
+
 def run_deviation(run_date: datetime | None = None) -> None:
-    date_value = (run_date or datetime.now()).date()
+    target_date = (run_date or datetime.now()).date()
 
     if run_date:
         # Fetch enough history to compute 200-day SMA ending on date_value
         df = yf.Ticker("^NDX").history(
-            start=date_value - timedelta(days=300),
-            end=date_value + timedelta(days=1),
+            start=target_date - timedelta(days=300),
+            end=target_date + timedelta(days=1),
         )
     else:
         df = yf.Ticker("^NDX").history(period="1y")
 
     if df.empty:
-        LOGGER.warning("No NDX data available for %s", date_value)
+        LOGGER.warning("No NDX data available for %s", target_date)
         return
 
-    curr = float(df["Close"].iloc[-1])
+    date_value, latest = _latest_market_row(df, target_date)
+    if not date_value or (run_date and _is_missing_target_date(date_value, target_date, "deviation")):
+        return
+
+    df = df[df.index.date <= date_value]
+    curr = float(latest["Close"])
     sma = float(df["Close"].rolling(window=200).mean().iloc[-1])
     dev = ((curr - sma) / sma) * 100
     query = """
@@ -43,32 +83,49 @@ def run_deviation(run_date: datetime | None = None) -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(query, (date_value, curr, sma, dev))
+            if not run_date:
+                _delete_stale_rows(cur, "track_deviation", date_value, target_date)
         conn.commit()
 
 
 def run_liquidity(run_date: datetime | None = None) -> None:
-    date_value = (run_date or datetime.now()).date()
+    target_date = (run_date or datetime.now()).date()
 
     try:
         if run_date:
             # Bound the end date so we only get data up to the target date
-            start = date_value - timedelta(days=7)
-            end = date_value + timedelta(days=2)
+            start = target_date - timedelta(days=14)
+            end = target_date
             rrp_data = web.DataReader("RRPONTSYD", "fred", start, end)
             tga_data = web.DataReader("WTREGEN", "fred", start, end)
         else:
-            start = datetime.now() - timedelta(days=7)
-            rrp_data = web.DataReader("RRPONTSYD", "fred", start)
-            tga_data = web.DataReader("WTREGEN", "fred", start)
+            start = target_date - timedelta(days=14)
+            rrp_data = web.DataReader("RRPONTSYD", "fred", start, target_date)
+            tga_data = web.DataReader("WTREGEN", "fred", start - timedelta(days=14), target_date)
 
         if len(rrp_data) == 0 or len(tga_data) == 0:
-            LOGGER.warning("No FRED data available for %s (likely weekend/holiday)", date_value)
+            LOGGER.warning("No FRED data available for %s (likely weekend/holiday)", target_date)
+            return
+
+        rrp_data = rrp_data.dropna()
+        tga_data = tga_data.dropna()
+        if len(rrp_data) == 0 or len(tga_data) == 0:
+            LOGGER.warning("No populated FRED data available for %s", target_date)
+            return
+
+        date_value = rrp_data.index[-1].date()
+        if run_date and _is_missing_target_date(date_value, target_date, "liquidity"):
+            return
+
+        tga_data = tga_data[tga_data.index.date <= date_value]
+        if len(tga_data) == 0:
+            LOGGER.warning("No TGA data available on or before %s", date_value)
             return
 
         rrp = float(rrp_data.iloc[-1].item())
         tga = float(tga_data.iloc[-1].item())
     except (IndexError, KeyError):
-        LOGGER.warning("FRED data not available for %s (likely weekend/holiday)", date_value)
+        LOGGER.warning("FRED data not available for %s (likely weekend/holiday)", target_date)
         return
 
     query = """
@@ -82,6 +139,8 @@ def run_liquidity(run_date: datetime | None = None) -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(query, (date_value, rrp, tga))
+            if not run_date:
+                _delete_stale_rows(cur, "track_liquidity", date_value, target_date)
         conn.commit()
 
 
@@ -124,22 +183,27 @@ def run_sentiment(run_date: datetime | None = None) -> None:
 
 
 def run_ipo_heat(run_date: datetime | None = None) -> None:
-    date_value = (run_date or datetime.now()).date()
+    target_date = (run_date or datetime.now()).date()
 
     if run_date:
         hist = yf.Ticker("IPO").history(
-            start=date_value - timedelta(days=14),
-            end=date_value + timedelta(days=1),
+            start=target_date - timedelta(days=14),
+            end=target_date + timedelta(days=1),
         )
     else:
         hist = yf.Ticker("IPO").history(period="5d")
 
     if hist.empty:
-        LOGGER.warning("No IPO data available for %s", date_value)
+        LOGGER.warning("No IPO data available for %s", target_date)
         return
 
-    curr = float(hist["Close"].iloc[-1])
-    vol_ratio = float(hist["Volume"].iloc[-1] / hist["Volume"].mean())
+    date_value, latest = _latest_market_row(hist, target_date)
+    if not date_value or (run_date and _is_missing_target_date(date_value, target_date, "ipo_heat")):
+        return
+
+    hist = hist[hist.index.date <= date_value]
+    curr = float(latest["Close"])
+    vol_ratio = float(latest["Volume"] / hist["Volume"].mean())
     query = """
         INSERT INTO track_ipo_heat (date, ipo_etf_price, vol_heat_ratio)
         VALUES (%s, %s, %s)
@@ -151,6 +215,8 @@ def run_ipo_heat(run_date: datetime | None = None) -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(query, (date_value, curr, vol_ratio))
+            if not run_date:
+                _delete_stale_rows(cur, "track_ipo_heat", date_value, target_date)
         conn.commit()
 
 
@@ -193,21 +259,26 @@ def run_valuation(run_date: datetime | None = None) -> None:
 
 def run_volatility(run_date: datetime | None = None) -> None:
     """Track VIX (fear index) and its moving average"""
-    date_value = (run_date or datetime.now()).date()
+    target_date = (run_date or datetime.now()).date()
 
     if run_date:
         vix = yf.Ticker("^VIX").history(
-            start=date_value - timedelta(days=35),
-            end=date_value + timedelta(days=1),
+            start=target_date - timedelta(days=35),
+            end=target_date + timedelta(days=1),
         )
     else:
         vix = yf.Ticker("^VIX").history(period="1mo")
 
     if vix.empty:
-        LOGGER.warning("No VIX data available for %s", date_value)
+        LOGGER.warning("No VIX data available for %s", target_date)
         return
 
-    current_vix = float(vix["Close"].iloc[-1])
+    date_value, latest = _latest_market_row(vix, target_date)
+    if not date_value or (run_date and _is_missing_target_date(date_value, target_date, "volatility")):
+        return
+
+    vix = vix[vix.index.date <= date_value]
+    current_vix = float(latest["Close"])
     vix_sma_20 = float(vix["Close"].rolling(window=20).mean().iloc[-1])
     query = """
         INSERT INTO track_volatility (date, vix_level, vix_sma_20)
@@ -220,6 +291,8 @@ def run_volatility(run_date: datetime | None = None) -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(query, (date_value, current_vix, vix_sma_20))
+            if not run_date:
+                _delete_stale_rows(cur, "track_volatility", date_value, target_date)
         conn.commit()
 
 

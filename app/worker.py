@@ -1,10 +1,10 @@
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import yfinance as yf
 from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.cron import CronTrigger
 
 from app.collector import run_all
 from app.db import fetch_all, fetch_one, init_tables
@@ -15,7 +15,14 @@ LOGGER = logging.getLogger(__name__)
 SCHEDULE_TZ = os.getenv("SCHEDULE_TZ", "America/Los_Angeles")
 SCHEDULE_HOUR = int(os.getenv("SCHEDULE_HOUR", "13"))
 SCHEDULE_MINUTE = int(os.getenv("SCHEDULE_MINUTE", "0"))
-BACKFILL_DAYS = int(os.getenv("BACKFILL_DAYS", "7"))
+CATCHUP_DAYS = int(os.getenv("CATCHUP_DAYS", os.getenv("BACKFILL_DAYS", "365")))
+
+BACKFILL_TABLES = {
+    "deviation": "track_deviation",
+    "liquidity": "track_liquidity",
+    "ipo_heat": "track_ipo_heat",
+    "volatility": "track_volatility",
+}
 
 
 def has_data_for_date(date_str: str) -> bool:
@@ -23,52 +30,92 @@ def has_data_for_date(date_str: str) -> bool:
     return row is not None
 
 
+def get_latest_table_dates() -> dict[str, date | None]:
+    rows = fetch_all(
+        """
+        SELECT 'deviation' AS metric, max(date) AS max_date FROM track_deviation
+        UNION ALL
+        SELECT 'liquidity', max(date) FROM track_liquidity
+        UNION ALL
+        SELECT 'ipo_heat', max(date) FROM track_ipo_heat
+        UNION ALL
+        SELECT 'volatility', max(date) FROM track_volatility
+        """
+    )
+    return {row["metric"]: row["max_date"] for row in rows}
+
+
+def get_expected_market_dates(start_date: date, end_date: date) -> list[date]:
+    """Use NDX history as the trading-day calendar for backfillable market metrics."""
+    if start_date > end_date:
+        return []
+
+    history = yf.Ticker("^NDX").history(
+        start=start_date,
+        end=end_date + timedelta(days=1),
+    )
+    if history.empty:
+        return []
+
+    return sorted({dt.date() for dt in history.index if start_date <= dt.date() <= end_date})
+
+
 def get_missing_dates(lookback_days: int) -> list[str]:
-    """Find dates in the past N days that don't have data (excluding weekends)"""
+    """Find trading dates missing from any backfillable table."""
     tz = ZoneInfo(SCHEDULE_TZ)
     today = datetime.now(tz).date()
-    
-    # Get all dates from DB in the lookback window
-    start_date = today - timedelta(days=lookback_days)
-    rows = fetch_all(
-        "SELECT DISTINCT date FROM track_deviation WHERE date >= %s ORDER BY date",
-        (start_date,)
-    )
-    existing_dates = {row["date"] for row in rows}
-    
-    # Generate expected dates (weekdays only)
+    earliest_allowed = today - timedelta(days=lookback_days)
+    latest_dates = get_latest_table_dates()
+    populated_dates = [value for value in latest_dates.values() if value is not None]
+
+    if populated_dates:
+        start_date = max(earliest_allowed, min(populated_dates) - timedelta(days=3))
+    else:
+        start_date = earliest_allowed
+
+    expected_dates = get_expected_market_dates(start_date, today)
+    if not expected_dates:
+        LOGGER.warning("No expected market dates found from %s to %s", start_date, today)
+        return []
+
+    existing_by_table = {}
+    for metric, table_name in BACKFILL_TABLES.items():
+        rows = fetch_all(
+            f"SELECT date FROM {table_name} WHERE date >= %s AND date <= %s",
+            (start_date, today),
+        )
+        existing_by_table[metric] = {row["date"] for row in rows}
+
     missing = []
-    current = start_date
-    while current <= today:
-        # Skip weekends (5=Saturday, 6=Sunday)
-        if current.weekday() < 5 and current not in existing_dates:
-            missing.append(current.isoformat())
-        current += timedelta(days=1)
-    
+    for expected_date in expected_dates:
+        if any(expected_date not in dates for dates in existing_by_table.values()):
+            missing.append(expected_date.isoformat())
+
     return missing
 
 
 def collect_job() -> None:
-    """Collect today's data if not already present."""
+    """Collect the latest available data.
+
+    Collectors write market/FRED values under their source observation date, so
+    this is safe to run repeatedly while waiting for data sources to update.
+    """
     tz = ZoneInfo(SCHEDULE_TZ)
     today = datetime.now(tz).date().isoformat()
-    if has_data_for_date(today):
-        LOGGER.info("Data already exists for today (%s), skipping", today)
-        return
-    LOGGER.info("Collecting data for %s", today)
+    LOGGER.info("Collecting latest available data as of %s", today)
     try:
         run_all()
-        LOGGER.info("Collection completed for %s", today)
+        LOGGER.info("Latest data collection completed")
     except Exception:
-        LOGGER.exception("Collection failed for %s", today)
+        LOGGER.exception("Latest data collection failed")
 
 
 def backfill_missing_data() -> None:
     """Check for and backfill any missing dates in the lookback window"""
     try:
-        missing = get_missing_dates(BACKFILL_DAYS)
+        missing = get_missing_dates(CATCHUP_DAYS)
         if not missing:
-            LOGGER.info("No missing dates found in the past %d days", BACKFILL_DAYS)
+            LOGGER.info("No missing dates found in the past %d days", CATCHUP_DAYS)
             return
         
         LOGGER.info("Found %d missing dates: %s", len(missing), missing[:5])
@@ -92,16 +139,11 @@ def run_scheduler() -> None:
     init_tables()
     
     # Check for and backfill missing dates on startup
-    LOGGER.info("Checking for missing data in the past %d days", BACKFILL_DAYS)
+    LOGGER.info("Checking for missing data in the past %d days", CATCHUP_DAYS)
     backfill_missing_data()
     
-    # Also check today specifically
-    today = datetime.now(tz).date().isoformat()
-    if not has_data_for_date(today):
-        LOGGER.info("No data found for today (%s), running collection", today)
-        collect_job()
-    else:
-        LOGGER.info("Data already exists for today (%s)", today)
+    # Also refresh the latest available observation on startup.
+    collect_job()
 
     check_interval = int(os.getenv("CHECK_INTERVAL_MINUTES", "30"))
 
