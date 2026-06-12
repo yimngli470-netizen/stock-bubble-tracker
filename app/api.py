@@ -3,6 +3,15 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
+from app.composite import (
+    DISCONNECT_SIGNALS,
+    PANIC_ZONE,
+    compute,
+    episode_scores,
+    history,
+    latest_values,
+    quadrant,
+)
 from app.db import fetch_all, init_tables
 
 app = FastAPI(title="Bubble Tracker API")
@@ -14,6 +23,13 @@ TABLES = {
     "ipo_heat": "track_ipo_heat",
     "valuation": "track_valuation",
     "volatility": "track_volatility",
+    "credit": "track_credit",
+    "concentration": "track_concentration",
+    "hot_sector": "track_hot_sector",
+    "term_structure": "track_term_structure",
+    "margin_debt": "track_margin_debt",
+    "put_call": "track_put_call",
+    "fundamentals": "track_fundamentals",
 }
 
 
@@ -45,6 +61,42 @@ def metric_series(metric: str) -> list[dict]:
 
     rows = fetch_all(f"SELECT * FROM {table_name} ORDER BY date ASC")
     return rows
+
+
+METRIC_HISTORY_KEYS = {"cape", "cape_percentile", "multiple_expansion", "margins", "credit_gap"}
+
+
+@app.get("/metric_history/{metric}")
+def metric_history(metric: str) -> list[dict]:
+    if metric not in METRIC_HISTORY_KEYS:
+        raise HTTPException(status_code=404, detail="Unknown metric")
+    return fetch_all(
+        "SELECT date, value FROM track_metric_history WHERE metric = %s ORDER BY date ASC",
+        (metric,),
+    )
+
+
+@app.get("/composite")
+def composite() -> dict:
+    values, dates = latest_values()
+    result = compute(values)
+    for signal in result["signals"]:
+        signal["date"] = dates.get(signal["key"])
+    result["episodes"] = episode_scores()
+    result["panic_zone"] = PANIC_ZONE
+
+    d_values, d_dates = latest_values(DISCONNECT_SIGNALS)
+    disconnect = compute(d_values, DISCONNECT_SIGNALS)
+    for signal in disconnect["signals"]:
+        signal["date"] = d_dates.get(signal["key"])
+    disconnect["quadrant"] = quadrant(result["score"], disconnect["score"])
+    result["disconnect"] = disconnect
+    return result
+
+
+@app.get("/composite/history")
+def composite_history() -> list[dict]:
+    return history()
 
 
 @app.get("/latest")

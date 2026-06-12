@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bubble Tracker</title>
+    <title>Market Mood Tracker</title>
     <style>
       :root {
         --bg: #f5f7fb;
@@ -118,12 +118,299 @@
         color: var(--muted);
         font-size: 0.85rem;
       }
+      .page-tabs {
+        display: inline-flex;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid #d7deea;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.8);
+        margin-bottom: 18px;
+      }
+      .page-tabs button {
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.95rem;
+        font-weight: 600;
+        padding: 8px 18px;
+      }
+      .page-tabs button:hover {
+        color: var(--text);
+        background: #eef4ff;
+      }
+      .page-tabs button.active {
+        color: #ffffff;
+        background: var(--accent);
+        box-shadow: 0 2px 8px rgba(11, 107, 203, 0.25);
+      }
+      .quad-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+      }
+      .quad {
+        position: relative;
+        width: var(--quad-size, 300px);
+        height: var(--quad-size, 300px);
+        display: grid;
+        grid-template-columns: 60% 40%;
+        grid-template-rows: 40% 60%;
+        border: 1px solid #d7deea;
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: zoom-in;
+        transition: box-shadow 0.18s ease;
+      }
+      .quad:hover {
+        box-shadow: 0 6px 20px rgba(24, 39, 75, 0.16);
+      }
+      .quad-cell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-size: calc(var(--quad-size, 300px) * 0.032);
+        line-height: 1.35;
+        color: var(--muted);
+        background: #f8fafd;
+        border: 1px dashed #e2e8f2;
+        padding: 4px;
+      }
+      .quad-expand {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        font-size: 0.7rem;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.85);
+        border-radius: 5px;
+        padding: 1px 6px;
+        pointer-events: none;
+      }
+      .quad-cell.active {
+        background: #fff3f0;
+        color: var(--danger);
+        font-weight: 700;
+      }
+      .quad-cell.active.calm {
+        background: #eefaf2;
+        color: var(--ok);
+      }
+      .quad-dot {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid #ffffff;
+        box-shadow: 0 0 0 4px rgba(11, 107, 203, 0.18);
+        transform: translate(-50%, 50%);
+        animation: quad-pulse 2.4s ease-in-out infinite;
+      }
+      .quad-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(16, 24, 40, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        padding: 24px;
+        cursor: zoom-out;
+      }
+      .quad-modal[hidden] {
+        display: none;
+      }
+      .quad-modal .quad {
+        --quad-size: min(82vw, 78vh, 620px);
+        cursor: default;
+        background: #ffffff;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+      }
+      .quad-modal .quad-cell {
+        font-size: 1.05rem;
+      }
+      .quad-modal .quad-axis {
+        font-size: 1rem;
+      }
+      .quad-modal .quad-expand {
+        display: none;
+      }
+      .quad-modal-close {
+        position: absolute;
+        top: 18px;
+        right: 22px;
+        color: #fff;
+        font-size: 1.6rem;
+        cursor: pointer;
+        line-height: 1;
+      }
+      @keyframes quad-pulse {
+        0%, 100% { box-shadow: 0 0 0 4px rgba(11, 107, 203, 0.18); }
+        50% { box-shadow: 0 0 0 9px rgba(11, 107, 203, 0.07); }
+      }
+      .quad-axis {
+        font-size: 0.7rem;
+        color: var(--muted);
+      }
+      .quad-y {
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+      }
+      .quad-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .section-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        margin: 22px 2px 10px;
+      }
+      .section-title h2 {
+        margin: 0;
+        font-size: 1.02rem;
+      }
+      .section-title .sub {
+        margin: 0;
+        font-size: 0.82rem;
+      }
+      .card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .card-title {
+        display: inline-flex;
+        align-items: center;
+      }
+      .info-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        margin-left: 6px;
+        border-radius: 50%;
+        border: 1px solid var(--muted);
+        color: var(--muted);
+        font-size: 0.62rem;
+        font-style: normal;
+        font-weight: 700;
+        cursor: help;
+        position: relative;
+        flex: none;
+      }
+      .info-icon .tip {
+        display: none;
+        position: absolute;
+        bottom: 150%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 210px;
+        background: #1a2433;
+        color: #fff;
+        font-size: 0.74rem;
+        font-style: normal;
+        font-weight: 400;
+        line-height: 1.45;
+        text-align: left;
+        padding: 8px 10px;
+        border-radius: 6px;
+        box-shadow: 0 6px 18px rgba(24, 39, 75, 0.28);
+        z-index: 30;
+        white-space: normal;
+      }
+      .info-icon:hover .tip,
+      .info-icon:focus .tip {
+        display: block;
+      }
+      .chip {
+        font-size: 0.7rem;
+        color: var(--muted);
+        background: #eef2f9;
+        border-radius: 10px;
+        padding: 2px 8px;
+        white-space: nowrap;
+      }
+      .hero {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+        align-items: stretch;
+      }
+      .hero-left {
+        min-width: 230px;
+      }
+      .hero-score {
+        font-size: 3rem;
+        font-weight: 800;
+        line-height: 1.1;
+      }
+      .hero-status {
+        font-weight: 700;
+        margin-top: 2px;
+      }
+      .hero-episodes {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .hero-episodes .dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+      }
+      .hero-mid {
+        min-width: 300px;
+        border-left: 1px solid #e3e9f4;
+        padding-left: 22px;
+      }
+      .hero-score2 {
+        font-size: 2rem;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+      .quadrant {
+        margin-top: 10px;
+        font-size: 0.84rem;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      .hero-chart {
+        flex: 1 1 380px;
+        min-height: 170px;
+        position: relative;
+      }
+      .hero-chart canvas {
+        max-height: 170px;
+      }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <h1>Bubble Tracker</h1>
-      <div class="sub">Live snapshot from Postgres. Auto-refresh every 30 seconds.</div>
+      <h1>Market Mood Tracker</h1>
+      <div class="sub" id="page-sub">
+        Measures crowd sentiment and positioning — manic euphoria at the top of the scale, capitulation panic at the bottom.
+        Pair this gauge with fundamentals.
+      </div>
+      <div class="page-tabs" aria-label="Pages">
+        <button type="button" data-page="euphoria">Euphoria–Panic Index</button>
+        <button type="button" data-page="disconnect">Fundamental Disconnect Index</button>
+      </div>
       <div class="toolbar">
         <div id="status" class="sub">Loading...</div>
         <div class="range-toggle" aria-label="Chart date range">
@@ -132,8 +419,13 @@
           <button type="button" data-range="all">All</button>
         </div>
       </div>
-      <div class="grid" id="cards"></div>
+      <div id="cards"></div>
       <div class="footer">API: <code>/latest</code> and <code>/metrics/{metric}</code></div>
+    </div>
+
+    <div id="quad-modal" class="quad-modal" hidden>
+      <div class="quad-modal-close" aria-label="Close">&times;</div>
+      <div id="quad-modal-body"></div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -206,18 +498,59 @@
         });
       }
 
-      async function fetchSeries(metric, field) {
+      function hasNumber(value) {
+        return Number.isFinite(Number(value));
+      }
+
+      function formatFixed(value, digits, suffix = "") {
+        return hasNumber(value) ? `${Number(value).toFixed(digits)}${suffix}` : null;
+      }
+
+      function formatRounded(value, suffix = "") {
+        return hasNumber(value) ? `${Math.round(Number(value))}${suffix}` : null;
+      }
+
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      function lastDate(series) {
+        return series && series.dates && series.dates.length ? series.dates[series.dates.length - 1] : null;
+      }
+      function asOfMonth(series) {
+        const d = lastDate(series);
+        if (!d) return "—";
+        const [y, m] = d.split("-");
+        return `${monthNames[Number(m) - 1]} ${y}`;
+      }
+      function asOfQuarter(series) {
+        const d = lastDate(series);
+        if (!d) return "—";
+        const [y, m] = d.split("-");
+        return `Q${Math.floor((Number(m) - 1) / 3) + 1} ${y}`;
+      }
+
+      async function fetchSeries(metric, field, opts = {}) {
         const r = await fetch(`/metrics/${metric}`);
         if (!r.ok) return { dates: [], values: [] };
         const rows = await r.json();
-        const filteredRows = applyRange(rows);
+        // Monthly series (e.g. margin debt) ignore the daily range toggle
+        const filteredRows = opts.lastN ? rows.slice(-opts.lastN) : applyRange(rows);
         return {
           dates: filteredRows.map(x => x.date),
           values: filteredRows.map((x) => { const v = Number(x[field]); return Number.isNaN(v) ? null : v; })
         };
       }
 
-      function createChart(canvasId, data, label, color = '#0b6bcb', thresholds = []) {
+      async function fetchMetricHistory(metric, lastN) {
+        const r = await fetch(`/metric_history/${metric}`);
+        if (!r.ok) return { dates: [], values: [] };
+        let rows = await r.json();
+        if (lastN) rows = rows.slice(-lastN);
+        return {
+          dates: rows.map((x) => x.date),
+          values: rows.map((x) => { const v = Number(x.value); return Number.isNaN(v) ? null : v; }),
+        };
+      }
+
+      function createChart(canvasId, data, label, color = '#0b6bcb', thresholds = [], stepped = false) {
         const ctx = document.getElementById(canvasId);
         if (!ctx) return;
         
@@ -248,7 +581,8 @@
               data: data.values,
               borderColor: color,
               backgroundColor: color + '20',
-              tension: 0.3,
+              tension: stepped ? 0 : 0.3,
+              stepped: stepped ? 'before' : false,
               fill: true,
               pointRadius: 2,
               pointHoverRadius: 4,
@@ -287,33 +621,139 @@
         });
       }
 
+      function compositeStatus(score) {
+        if (!hasNumber(score)) return { label: "No data", color: "#999999" };
+        if (score < 15) return { label: "Capitulation — historically a long-term entry zone", color: "#2563eb" };
+        if (score < 30) return { label: "Fearful", color: "#0e7490" };
+        if (score < 50) return { label: "Neutral", color: "#1d8f4f" };
+        if (score < 65) return { label: "Heating up", color: "#d97706" };
+        if (score < 80) return { label: "Euphoric", color: "#c73030" };
+        return { label: "Manic extreme", color: "#7f1d1d" };
+      }
+
+      function disconnectStatus(score) {
+        if (!hasNumber(score)) return { label: "No data", color: "#999999" };
+        if (score < 25) return { label: "Anchored to fundamentals", color: "#1d8f4f" };
+        if (score < 50) return { label: "Full price", color: "#ca8a04" };
+        if (score < 70) return { label: "Stretched", color: "#d97706" };
+        return { label: "Disconnected", color: "#c73030" };
+      }
+
+      const pageSubs = {
+        euphoria:
+          "Measures crowd sentiment and positioning — manic euphoria at the top of the scale, capitulation panic at the bottom. Pair this gauge with fundamentals.",
+        disconnect:
+          "The second axis: is the price backed by earnings? Sentiment can be euphoric for good reason — this index measures how far prices have detached from the cash flows underneath.",
+      };
+      let currentPage = location.hash === "#disconnect" ? "disconnect" : "euphoria";
+      const pageButtons = document.querySelectorAll("[data-page]");
+      const pageSub = document.getElementById("page-sub");
+
+      function updatePageButtons() {
+        pageButtons.forEach((button) => {
+          button.classList.toggle("active", button.dataset.page === currentPage);
+        });
+        pageSub.textContent = pageSubs[currentPage];
+      }
+
+      let lastQuadScores = null;
+      function quadrantHtml(e, d) {
+        if (!hasNumber(e) || !hasNumber(d)) return "";
+        lastQuadScores = { e, d };
+        const cells = [
+          { label: "Expensive<br>but unloved", active: e < 60 && d >= 60, calm: false },
+          { label: "Bubble<br>conditions", active: e >= 60 && d >= 60, calm: false },
+          { label: "Healthy", active: e < 60 && d < 60, calm: true },
+          { label: "Hot but<br>earning it", active: e >= 60 && d < 60, calm: false },
+        ];
+        const x = Math.min(97, Math.max(3, e));
+        const y = Math.min(97, Math.max(3, d));
+        return `
+          <div class="quad-wrap">
+            <div class="quad-row">
+              <div class="quad-axis quad-y">Fundamental Disconnect →</div>
+              <div class="quad">
+                ${cells
+                  .map((c) => `<div class="quad-cell${c.active ? " active" : ""}${c.active && c.calm ? " calm" : ""}">${c.label}</div>`)
+                  .join("")}
+                <div class="quad-dot" style="left:${x}%; bottom:${y}%" title="Euphoria ${Math.round(e)} / Disconnect ${Math.round(d)}"></div>
+                <div class="quad-expand">⤢ expand</div>
+              </div>
+            </div>
+            <div class="quad-axis">Euphoria →</div>
+          </div>`;
+      }
+
+      const episodeColors = ["#c73030", "#d97706", "#2563eb", "#9333ea"];
+      const sectorNames = {
+        XLK: "Technology", XLF: "Financials", XLE: "Energy", XLV: "Health Care",
+        XLY: "Consumer Discretionary", XLP: "Consumer Staples", XLI: "Industrials",
+        XLB: "Materials", XLU: "Utilities", XLRE: "Real Estate", XLC: "Communication Services",
+      };
+      const sectionOrder = [
+        "Price & Valuation",
+        "Speculation & Sentiment",
+        "Credit & Liquidity",
+        "Volatility & Complacency",
+        "Fundamental Disconnect",
+      ];
+      const sectionMeta = {
+        "Fundamental Disconnect": "separate index — is the price backed by earnings?",
+      };
+
       async function render() {
         try {
           const r = await fetch("/latest");
           if (!r.ok) throw new Error("API unavailable");
           const data = await r.json();
 
+          const composite = await (await fetch("/composite")).json();
+          const compositeHistory = applyRange(await (await fetch("/composite/history")).json());
+          const signalsByKey = {};
+          (composite.signals || []).forEach((s) => { signalsByKey[s.key] = s; });
+          ((composite.disconnect || {}).signals || []).forEach((s) => { signalsByKey[s.key] = s; });
+
           const deviationSeries = await fetchSeries("deviation", "deviation_pct");
           const sentimentSeries = await fetchSeries("sentiment", "fear_greed_score");
           const liquiditySeries = await fetchSeries("liquidity", "rrp_billions");
-          const ipoSeries = await fetchSeries("ipo_heat", "vol_heat_ratio");
+          const ipoSeries = await fetchSeries("ipo_heat", "ipo_rel_dev_pct");
           const valuationSeries = await fetchSeries("valuation", "spy_pe_deviation_pct");
           const volatilitySeries = await fetchSeries("volatility", "vix_level");
+          const creditSeries = await fetchSeries("credit", "hy_spread_pct");
+          const hotSectorSeries = await fetchSeries("hot_sector", "dev_pct");
+          const qqqQqqeSeries = await fetchSeries("concentration", "qqq_qqqe_dev_pct");
+          const termStructureSeries = await fetchSeries("term_structure", "vix_ratio");
+          const marginDebtSeries = await fetchSeries("margin_debt", "yoy_growth_pct", { lastN: 24 });
+          const putCallSeries = await fetchSeries("put_call", "equity_pc_ratio");
+          // ERP is daily — keep the smooth line; the rest are monthly/quarterly,
+          // shown as stepped charts from their native-cadence history.
+          const erpSeries = await fetchSeries("fundamentals", "erp_pct");
+          const capeSeries = await fetchMetricHistory("cape_percentile", 72);
+          const multExpSeries = await fetchMetricHistory("multiple_expansion", 28);
+          const marginsSeries = await fetchMetricHistory("margins", 28);
+          const creditGapSeries = await fetchMetricHistory("credit_gap", 28);
+          // Actual data observation period (not today's collection date)
+          const capeAsOf = asOfMonth(capeSeries);
+          const multExpAsOf = asOfQuarter(multExpSeries);
+          const marginsAsOf = asOfQuarter(marginsSeries);
+          const creditGapAsOf = asOfQuarter(creditGapSeries);
 
           const items = [
             {
+              key: "deviation", section: "Price & Valuation", rank: 1,
               title: "Nasdaq Deviation",
-              value: data.deviation ? `${data.deviation.deviation_pct.toFixed(2)}%` : "No data",
+              value: formatFixed(data.deviation?.deviation_pct, 2, "%") || "No data",
               meta: data.deviation ? `Date: ${data.deviation.date}` : "Run worker once",
               desc: "NASDAQ-100 deviation from 200-day moving average. >15% signals overheating.",
-              cls: data.deviation && data.deviation.deviation_pct > 15 ? "bad" : "ok",
+              cls: data.deviation && hasNumber(data.deviation.deviation_pct) && data.deviation.deviation_pct > 15 ? "bad" : "ok",
               chartData: deviationSeries,
               chartColor: '#0b6bcb',
               thresholds: [{ value: 15, color: '#c73030' }],
             },
             {
+              key: "fear_greed", section: "Speculation & Sentiment", rank: 3,
               title: "Fear & Greed",
-              value: data.sentiment ? `${Math.round(data.sentiment.fear_greed_score)} / 100` : "No data",
+              value: formatRounded(data.sentiment?.fear_greed_score, " / 100") || "No data",
               meta: data.sentiment ? `${data.sentiment.rating} (${data.sentiment.date})` : "CNN API blocked (418)",
               desc: "CNN Fear & Greed Index. <25 = extreme fear, >75 = extreme greed.",
               cls: "",
@@ -325,50 +765,56 @@
               ],
             },
             {
+              key: "liquidity", section: "Credit & Liquidity", rank: 2,
               title: "Fed Liquidity",
-              value: data.liquidity ? `RRP ${Math.round(data.liquidity.rrp_billions)}B` : "No data",
-              meta: data.liquidity ? `TGA: ${Math.round(data.liquidity.tga_billions)}B` : "Run worker once",
-              desc: "Reverse Repo + Treasury General Account. Low RRP = more liquidity flooding markets.",
+              value: data.liquidity && hasNumber(data.liquidity.rrp_billions) ? `RRP ${formatRounded(data.liquidity.rrp_billions, "B")}` : "No data",
+              meta: data.liquidity && hasNumber(data.liquidity.tga_billions) ? `TGA: ${formatRounded(data.liquidity.tga_billions, "B")}` : "Run worker once",
+              desc: "Cash parked overnight at the Fed (Reverse Repo, RRP) plus the Treasury's checking account (TGA). When these drain toward zero, that cash flows into markets instead — fuel for rising asset prices. Source: FRED.",
               cls: "",
               chartData: liquiditySeries,
               chartColor: '#1d8f4f',
             },
             {
-              title: "IPO Heat",
-              value: data.ipo_heat ? `${data.ipo_heat.vol_heat_ratio.toFixed(2)}x` : "No data",
-              meta: data.ipo_heat ? `Date: ${data.ipo_heat.date}` : "Run worker once",
-              desc: "IPO ETF volume ratio vs 5-day average. >2x signals speculative frenzy.",
-              cls: data.ipo_heat && data.ipo_heat.vol_heat_ratio > 2 ? "bad" : "ok",
+              key: "ipo_heat", section: "Speculation & Sentiment", rank: 4,
+              title: "IPO Appetite",
+              value: hasNumber(data.ipo_heat?.ipo_rel_dev_pct)
+                ? `${data.ipo_heat.ipo_rel_dev_pct > 0 ? '+' : ''}${formatFixed(data.ipo_heat.ipo_rel_dev_pct, 1, "%")}`
+                : "No data",
+              meta: data.ipo_heat
+                ? `Volume: ${formatFixed(data.ipo_heat.vol_heat_ratio, 2, "x")} 5-day avg (${data.ipo_heat.date})`
+                : "Run worker once",
+              desc: "Recently-listed companies (Renaissance IPO ETF) vs the S&P 500, deviation from 200-day trend — how much the market is paying up for new paper. At the Feb 2021 SPAC mania it hit +28%; in the 2022 bust −15%. Caveat: backwards-looking — it only sees companies after they list, so a hot upcoming pipeline (S-1 filings) won't register until those names trade.",
+              cls: data.ipo_heat && hasNumber(data.ipo_heat.ipo_rel_dev_pct) && data.ipo_heat.ipo_rel_dev_pct > 15 ? "bad" : "ok",
               chartData: ipoSeries,
               chartColor: '#ff6b35',
-              thresholds: [{ value: 2, color: '#c73030' }],
+              thresholds: [{ value: 15, color: '#c73030' }],
             },
             {
+              key: "valuation", section: "Price & Valuation", rank: 2,
               title: "Valuation (P/E)",
-              value: data.valuation && data.valuation.spy_pe && data.valuation.qqq_pe 
-                ? `SPY ${data.valuation.spy_pe.toFixed(1)} / QQQ ${data.valuation.qqq_pe.toFixed(1)}` 
+              value: hasNumber(data.valuation?.spy_pe) && hasNumber(data.valuation?.qqq_pe)
+                ? `SPY ${formatFixed(data.valuation.spy_pe, 1)} / QQQ ${formatFixed(data.valuation.qqq_pe, 1)}`
                 : "No data",
-              meta: data.valuation && data.valuation.spy_pe_deviation_pct != null
-                ? `${data.valuation.spy_pe_deviation_pct > 0 ? '+' : ''}${data.valuation.spy_pe_deviation_pct.toFixed(1)}% vs hist avg` 
+              meta: hasNumber(data.valuation?.spy_pe_deviation_pct)
+                ? `${data.valuation.spy_pe_deviation_pct > 0 ? '+' : ''}${formatFixed(data.valuation.spy_pe_deviation_pct, 1, "%")} vs hist avg`
                 : "Run worker once",
               desc: "Price-to-earnings ratios. Historical S&P 500 average is ~16. High P/E = expensive.",
-              cls: data.valuation && data.valuation.spy_pe_deviation_pct > 50 ? "bad" : "ok",
+              cls: data.valuation && hasNumber(data.valuation.spy_pe_deviation_pct) && data.valuation.spy_pe_deviation_pct > 50 ? "bad" : "ok",
               chartData: valuationSeries,
               chartColor: '#9333ea',
               thresholds: [{ value: 50, color: '#c73030' }],
             },
             {
+              key: "vix", section: "Volatility & Complacency", rank: 2,
               title: "VIX (Volatility)",
-              value: data.volatility && data.volatility.vix_level != null 
-                ? `${data.volatility.vix_level.toFixed(1)}` 
-                : "No data",
-              meta: data.volatility && data.volatility.vix_sma_20 != null
-                ? `20-day avg: ${data.volatility.vix_sma_20.toFixed(1)}`
+              value: formatFixed(data.volatility?.vix_level, 1) || "No data",
+              meta: hasNumber(data.volatility?.vix_sma_20)
+                ? `20-day avg: ${formatFixed(data.volatility.vix_sma_20, 1)}`
                 : data.volatility 
                   ? `Date: ${data.volatility.date}` 
                   : "Run worker once",
               desc: "VIX fear index. <12 = complacency risk, >30 = panic/crash mode.",
-              cls: data.volatility && data.volatility.vix_level < 12 ? "bad" : "ok",
+              cls: data.volatility && hasNumber(data.volatility.vix_level) && data.volatility.vix_level < 12 ? "bad" : "ok",
               chartData: volatilitySeries,
               chartColor: '#ea580c',
               thresholds: [
@@ -376,28 +822,285 @@
                 { value: 30, color: '#2563eb' },
               ],
             },
+            {
+              key: "credit", section: "Credit & Liquidity", rank: 1,
+              title: "HY Credit Spread",
+              value: formatFixed(data.credit?.hy_spread_pct, 2, "%") || "No data",
+              meta: data.credit ? `Date: ${data.credit.date}` : "Run worker once",
+              desc: "The extra interest investors demand to hold risky 'junk' corporate bonds instead of safe US Treasuries. A low spread (under 3%) means investors are complacent about risk — classic late-cycle euphoria; above 5% signals credit stress. Source: ICE BofA US High Yield index via FRED.",
+              cls: data.credit && hasNumber(data.credit.hy_spread_pct) && data.credit.hy_spread_pct < 3 ? "bad" : "ok",
+              chartData: creditSeries,
+              chartColor: '#0e7490',
+              thresholds: [
+                { value: 3, color: '#c73030' },
+                { value: 5, color: '#2563eb' },
+              ],
+            },
+            {
+              key: "hot_sector", section: "Price & Valuation", rank: 3,
+              title: "Hottest Sector vs Market",
+              value: hasNumber(data.hot_sector?.dev_pct)
+                ? `${data.hot_sector.dev_pct > 0 ? '+' : ''}${formatFixed(data.hot_sector.dev_pct, 1, "%")} ${data.hot_sector.sector ? `(${data.hot_sector.sector})` : ''}`
+                : "No data",
+              meta: data.hot_sector
+                ? `${sectorNames[data.hot_sector.sector] || data.hot_sector.sector} leads (${data.hot_sector.date})`
+                : "Run worker once",
+              desc: "Scans the cyclical/growth S&P sector ETFs and shows the one furthest above its 200-day trend relative to the whole market — in 2000 it was tech (+28%), in 2007 energy, today whatever leads. A single sector running >15% above trend means money is crowding into one story. Defensive sectors (staples, utilities, health care) are excluded: they lead during selloffs, which signals fear, not euphoria.",
+              cls: data.hot_sector && hasNumber(data.hot_sector.dev_pct) && data.hot_sector.dev_pct > 15 ? "bad" : "ok",
+              chartData: hotSectorSeries,
+              chartColor: '#db2777',
+              thresholds: [{ value: 15, color: '#c73030' }],
+            },
+            {
+              key: "qqq_qqqe", section: "Price & Valuation", rank: 4,
+              title: "Mega-cap Concentration (QQQ/QQQE)",
+              value: hasNumber(data.concentration?.qqq_qqqe_dev_pct)
+                ? `${data.concentration.qqq_qqqe_dev_pct > 0 ? '+' : ''}${formatFixed(data.concentration.qqq_qqqe_dev_pct, 1, "%")}`
+                : "No data",
+              meta: hasNumber(data.concentration?.qqq_qqqe_ratio)
+                ? `Ratio: ${formatFixed(data.concentration.qqq_qqqe_ratio, 3)} (${data.concentration.date})`
+                : "Run worker once",
+              desc: "Compares the normal NASDAQ-100 (QQQ, dominated by its biggest members) against an equal-weighted version (QQQE, every stock counts the same). This is a fragility gauge, not a mania timer: when a handful of mega-caps carry the index, one bad earnings report hits everything. It read low at the actual 2000 and 2021 euphoria peaks (manias are broad), so it gets the smallest weight in its section. >5% above its 200-day trend = stretched.",
+              cls: data.concentration && hasNumber(data.concentration.qqq_qqqe_dev_pct) && data.concentration.qqq_qqqe_dev_pct > 5 ? "bad" : "ok",
+              chartData: qqqQqqeSeries,
+              chartColor: '#65a30d',
+              thresholds: [{ value: 5, color: '#c73030' }],
+            },
+            {
+              key: "term_structure", section: "Volatility & Complacency", rank: 1,
+              title: "VIX Term Structure",
+              value: formatFixed(data.term_structure?.vix_ratio, 2) || "No data",
+              meta: hasNumber(data.term_structure?.vix_1m) && hasNumber(data.term_structure?.vix_3m)
+                ? `VIX ${formatFixed(data.term_structure.vix_1m, 1)} / VIX3M ${formatFixed(data.term_structure.vix_3m, 1)}`
+                : "Run worker once",
+              desc: "The 1-month VIX divided by the 3-month VIX. It normally sits below 1 because traders pay up for protection further out. Far below 0.85 means the market is unusually relaxed about near-term risk (complacency); above 1.0 the curve has 'inverted' — a sign of acute fear.",
+              cls: data.term_structure && hasNumber(data.term_structure.vix_ratio) && data.term_structure.vix_ratio < 0.85 ? "bad" : "ok",
+              chartData: termStructureSeries,
+              chartColor: '#475569',
+              thresholds: [
+                { value: 0.85, color: '#c73030' },
+                { value: 1.0, color: '#2563eb' },
+              ],
+            },
+            {
+              key: "margin_debt", section: "Speculation & Sentiment", rank: 1,
+              title: "Margin Debt (FINRA)",
+              value: hasNumber(data.margin_debt?.yoy_growth_pct)
+                ? `${data.margin_debt.yoy_growth_pct > 0 ? '+' : ''}${formatFixed(data.margin_debt.yoy_growth_pct, 1, "% YoY")}`
+                : "No data",
+              meta: hasNumber(data.margin_debt?.debit_balances_billions)
+                ? `$${formatRounded(data.margin_debt.debit_balances_billions, "B")} (${data.margin_debt.date})`
+                : "Run worker once",
+              desc: "Monthly, ~3-week lag. >40% YoY growth preceded the 2000, 2007 and 2021 tops. Chart shows last 24 months.",
+              cls: data.margin_debt && hasNumber(data.margin_debt.yoy_growth_pct) && data.margin_debt.yoy_growth_pct > 40 ? "bad" : "ok",
+              chartData: marginDebtSeries,
+              chartColor: '#b45309',
+              thresholds: [{ value: 40, color: '#c73030' }],
+              stepped: true,
+            },
+            {
+              key: "put_call", section: "Speculation & Sentiment", rank: 2,
+              title: "Equity Put/Call",
+              value: formatFixed(data.put_call?.equity_pc_ratio, 2) || "No data",
+              meta: hasNumber(data.put_call?.total_pc_ratio)
+                ? `Total P/C: ${formatFixed(data.put_call.total_pc_ratio, 2)} (${data.put_call.date})`
+                : "Run worker once",
+              desc: "CBOE equity put/call ratio. <0.50 = call-buying euphoria, >1.00 = heavy hedging/fear.",
+              cls: data.put_call && hasNumber(data.put_call.equity_pc_ratio) && data.put_call.equity_pc_ratio < 0.5 ? "bad" : "ok",
+              chartData: putCallSeries,
+              chartColor: '#4f46e5',
+              thresholds: [
+                { value: 0.5, color: '#c73030' },
+                { value: 1.0, color: '#2563eb' },
+              ],
+            },
+            {
+              key: "erp", section: "Fundamental Disconnect", rank: 1,
+              title: "Equity Risk Premium",
+              value: hasNumber(data.fundamentals?.erp_pct)
+                ? `${data.fundamentals.erp_pct > 0 ? '+' : ''}${formatFixed(data.fundamentals.erp_pct, 2, "%")}`
+                : "No data",
+              meta: data.fundamentals ? `Earnings yield − 10Y Treasury (${data.fundamentals.date})` : "Run worker once",
+              desc: "S&P 500 earnings yield (1 ÷ P/E) minus the 10-year Treasury yield — the extra return stocks offer over safe bonds. Negative means you're paying more for stocks than bonds pay you. March 2000 hit −3%, the all-time bubble signal.",
+              cls: data.fundamentals && hasNumber(data.fundamentals.erp_pct) && data.fundamentals.erp_pct < 0 ? "bad" : "ok",
+              chartData: erpSeries,
+              chartColor: '#b91c1c',
+              thresholds: [{ value: 0, color: '#c73030' }],
+            },
+            {
+              key: "multiple_expansion", section: "Fundamental Disconnect", rank: 2,
+              title: "Multiple Expansion (12m)",
+              value: hasNumber(data.fundamentals?.multiple_expansion_pct)
+                ? `${data.fundamentals.multiple_expansion_pct > 0 ? '+' : ''}${formatFixed(data.fundamentals.multiple_expansion_pct, 1, "%")}`
+                : "No data",
+              meta: data.fundamentals ? `S&P price vs corporate profits, 12-mo change · data thru ${multExpAsOf}` : "Run worker once",
+              desc: "How much of the past year's gain came from a richer valuation rather than earnings actually growing. Measured as the 12-month change in S&P 500 price relative to U.S. corporate profits (FRED, trailing-4-quarter average to smooth noise) — about one quarter of lag, far more current than GAAP trailing-EPS sources that lag ~9 months. Near 0% = rally is earnings-driven; strongly positive = price outrunning profits.",
+              cls: data.fundamentals && hasNumber(data.fundamentals.multiple_expansion_pct) && data.fundamentals.multiple_expansion_pct > 15 ? "bad" : "ok",
+              chartData: multExpSeries,
+              chartColor: '#7c3aed',
+              thresholds: [{ value: 15, color: '#c73030' }],
+              stepped: true,
+            },
+            {
+              key: "cape", section: "Fundamental Disconnect", rank: 3,
+              title: "CAPE Percentile",
+              value: hasNumber(data.fundamentals?.cape_percentile)
+                ? `${formatRounded(data.fundamentals.cape_percentile, "th")} pct`
+                : "No data",
+              meta: hasNumber(data.fundamentals?.cape)
+                ? `CAPE: ${formatFixed(data.fundamentals.cape, 1)} · data thru ${capeAsOf}`
+                : "Run worker once",
+              desc: "Shiller's cyclically-adjusted P/E (price vs 10-year average real earnings, data back to 1881), shown as its percentile within the last 30 years. Immune to one hot earnings year. Dot-com peaked at CAPE 44 (100th percentile).",
+              cls: data.fundamentals && hasNumber(data.fundamentals.cape_percentile) && data.fundamentals.cape_percentile > 90 ? "bad" : "ok",
+              chartData: capeSeries,
+              chartColor: '#0f766e',
+              thresholds: [{ value: 90, color: '#c73030' }],
+              stepped: true,
+            },
+            {
+              key: "margins", section: "Fundamental Disconnect", rank: 4,
+              title: "Profit Margins (CP/GDP)",
+              value: formatFixed(data.fundamentals?.margins_pct, 1, "%") || "No data",
+              meta: data.fundamentals ? `Corporate profits ÷ GDP, quarterly · data thru ${marginsAsOf}` : "Run worker once",
+              desc: "Corporate profits as a share of GDP (~9.5% modern average). Record-high margins make trailing P/E look deceptively cheap — if margins mean-revert, today's 'reasonable' valuations were an illusion. The check on 'earnings are perfect' arguments, especially for cyclical industries like memory.",
+              cls: data.fundamentals && hasNumber(data.fundamentals.margins_pct) && data.fundamentals.margins_pct > 12 ? "bad" : "ok",
+              chartData: marginsSeries,
+              chartColor: '#a16207',
+              thresholds: [{ value: 12, color: '#c73030' }],
+              stepped: true,
+            },
+            {
+              key: "credit_gap", section: "Fundamental Disconnect", rank: 5,
+              title: "Credit-to-GDP Gap",
+              value: hasNumber(data.fundamentals?.credit_gap_pct)
+                ? `${data.fundamentals.credit_gap_pct > 0 ? '+' : ''}${formatFixed(data.fundamentals.credit_gap_pct, 1, "pp")}`
+                : "No data",
+              meta: data.fundamentals ? `vs 10-year average, quarterly · data thru ${creditGapAsOf}` : "Run worker once",
+              desc: "Private-sector credit relative to GDP versus its own 10-year average (simplified BIS gap). Debt-financed bubbles — 2007 US housing, Japan 1990 — show up here when equity gauges stay quiet. Above +10pp has historically preceded credit crises.",
+              cls: data.fundamentals && hasNumber(data.fundamentals.credit_gap_pct) && data.fundamentals.credit_gap_pct > 10 ? "bad" : "ok",
+              chartData: creditGapSeries,
+              chartColor: '#475569',
+              thresholds: [{ value: 10, color: '#c73030' }],
+              stepped: true,
+            },
           ];
 
-          cards.innerHTML = items
-            .map(
-              (x, i) => `
-              <div class="card">
-                <div>${x.title}</div>
-                <div class="value ${x.cls}">${x.value}</div>
-                <div class="meta">${x.meta}</div>
-                ${x.desc ? `<div class="desc">${x.desc}</div>` : ''}
-                <div class="line">
-                  <canvas id="chart-${i}"></canvas>
+          const st = compositeStatus(composite.score);
+          const disconnect = composite.disconnect || {};
+          const dst = disconnectStatus(disconnect.score);
+          const liveCount = (composite.signals || []).filter((s) => s.subscore !== null).length;
+          const episodeLines = (composite.episodes || []).map((ep, i) => ({
+            value: ep.score,
+            color: episodeColors[i % episodeColors.length],
+          }));
+          const panicZone = composite.panic_zone;
+          if (panicZone) {
+            episodeLines.push({ value: panicZone.threshold, color: "#2563eb" });
+          }
+          const panicLegend = panicZone
+            ? `<span><span class="dot" style="background:#2563eb"></span>Panic zone &lt;${Math.round(panicZone.threshold)}% — ${panicZone.references
+                .map((p) => `${p.date.slice(0, 4)}: ${Math.round(p.score)}%`)
+                .join(" · ")}</span>`
+            : "";
+          const heroEuphoria = `
+            <div class="card">
+              <div class="hero">
+                <div class="hero-left">
+                  <div>Euphoria–Panic Index</div>
+                  <div class="hero-score" style="color:${st.color}">${hasNumber(composite.score) ? Math.round(composite.score) + "%" : "—"}</div>
+                  <div class="hero-status" style="color:${st.color}">${st.label}</div>
+                  <div class="meta">Weighted blend of ${liveCount}/12 signals (${composite.weight_used || 0}% of weight live)</div>
+                  <div class="meta">${(composite.signals || []).filter((s) => hasNumber(s.subscore) && s.subscore >= 70).length} of ${liveCount} signals in the red zone (heat ≥ 70)</div>
+                  <div class="meta">Second axis: <a href="#disconnect">Fundamental Disconnect ${hasNumber(disconnect.score) ? Math.round(disconnect.score) + "%" : ""} →</a></div>
+                  <div class="hero-episodes">
+                    ${(composite.episodes || [])
+                      .map((ep, i) => `<span><span class="dot" style="background:${episodeColors[i % episodeColors.length]}"></span>${ep.name} (${ep.date}): <b>${Math.round(ep.score)}%</b></span>`)
+                      .join("")}
+                    ${panicLegend}
+                  </div>
+                </div>
+                <div class="hero-chart"><canvas id="chart-composite"></canvas></div>
+              </div>
+            </div>`;
+
+          const heroDisconnect = `
+            <div class="card">
+              <div class="hero">
+                <div class="hero-left">
+                  <div>Fundamental Disconnect Index</div>
+                  <div class="hero-score" style="color:${dst.color}">${hasNumber(disconnect.score) ? Math.round(disconnect.score) + "%" : "—"}</div>
+                  <div class="hero-status" style="color:${dst.color}">${dst.label}</div>
+                  <div class="meta">Is the price backed by earnings?</div>
+                  <div class="meta">First axis: <a href="#euphoria">Euphoria–Panic ${hasNumber(composite.score) ? Math.round(composite.score) + "%" : ""} →</a></div>
+                  <div class="quadrant" style="color:${dst.color}">${disconnect.quadrant || ""}</div>
+                </div>
+                <div class="hero-mid">
+                  ${quadrantHtml(composite.score, disconnect.score)}
                 </div>
               </div>
-            `,
-            )
+            </div>`;
+
+          const cardHtml = (x) => {
+            const sig = signalsByKey[x.key];
+            const chip = sig
+              ? `<span class="chip">weight ${sig.weight}% · heat ${sig.subscore === null ? "—" : Math.round(sig.subscore)}</span>`
+              : "";
+            return `
+              <div class="card">
+                <div class="card-head">
+                  <div class="card-title">${x.title}${x.desc ? `<span class="info-icon" tabindex="0" aria-label="${x.title} description">i<span class="tip">${x.desc}</span></span>` : ''}</div>
+                  ${chip}
+                </div>
+                <div class="value ${x.cls}">${x.value}</div>
+                <div class="meta">${x.meta}</div>
+                <div class="line">
+                  <canvas id="chart-${x.key}"></canvas>
+                </div>
+              </div>`;
+          };
+
+          const visibleSections = currentPage === "euphoria"
+            ? sectionOrder.filter((s) => s !== "Fundamental Disconnect")
+            : ["Fundamental Disconnect"];
+          const hero = currentPage === "euphoria" ? heroEuphoria : heroDisconnect;
+
+          // Drop chart instances for canvases removed by the page switch
+          Object.keys(chartInstances).forEach((id) => {
+            chartInstances[id].destroy();
+            delete chartInstances[id];
+          });
+
+          cards.innerHTML = hero + visibleSections
+            .map((section) => {
+              const sectionItems = items
+                .filter((x) => x.section === section)
+                .sort((a, b) => a.rank - b.rank);
+              const sectionWeight = sectionItems.reduce((sum, x) => sum + (signalsByKey[x.key]?.weight || 0), 0);
+              const sub = sectionMeta[section] || `${sectionWeight}% of euphoria index · ranked most → least important`;
+              return `
+                <div class="section-title">
+                  <h2>${section}</h2>
+                  <div class="sub">${sub}</div>
+                </div>
+                <div class="grid">${sectionItems.map(cardHtml).join("")}</div>`;
+            })
             .join("");
 
           // Create charts after DOM is ready
-          items.forEach((item, i) => {
-            createChart(`chart-${i}`, item.chartData, item.title, item.chartColor || '#0b6bcb', item.thresholds || []);
-          });
+          if (currentPage === "euphoria") {
+            createChart(
+              "chart-composite",
+              { dates: compositeHistory.map((x) => x.date), values: compositeHistory.map((x) => Number(x.score)) },
+              "Euphoria–Panic Index",
+              "#0b6bcb",
+              episodeLines
+            );
+          }
+          items
+            .filter((item) => visibleSections.includes(item.section))
+            .forEach((item) => {
+              createChart(`chart-${item.key}`, item.chartData, item.title, item.chartColor || '#0b6bcb', item.thresholds || [], item.stepped || false);
+            });
 
           status.textContent = `Last refresh: ${new Date().toLocaleString()}`;
         } catch (err) {
@@ -413,7 +1116,49 @@
         });
       });
 
+      const quadModal = document.getElementById("quad-modal");
+      const quadModalBody = document.getElementById("quad-modal-body");
+
+      function closeQuadModal() {
+        quadModal.hidden = true;
+        quadModalBody.innerHTML = "";
+      }
+
+      cards.addEventListener("click", (event) => {
+        if (event.target.closest(".quad") && lastQuadScores) {
+          quadModalBody.innerHTML = quadrantHtml(lastQuadScores.e, lastQuadScores.d);
+          quadModal.hidden = false;
+        }
+      });
+      quadModal.addEventListener("click", (event) => {
+        if (event.target === quadModal || event.target.closest(".quad-modal-close")) {
+          closeQuadModal();
+        }
+      });
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !quadModal.hidden) closeQuadModal();
+      });
+
+      pageButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          currentPage = button.dataset.page;
+          location.hash = currentPage === "disconnect" ? "#disconnect" : "#euphoria";
+          updatePageButtons();
+          render();
+        });
+      });
+
+      window.addEventListener("hashchange", () => {
+        const page = location.hash === "#disconnect" ? "disconnect" : "euphoria";
+        if (page !== currentPage) {
+          currentPage = page;
+          updatePageButtons();
+          render();
+        }
+      });
+
       updateRangeButtons();
+      updatePageButtons();
       render();
       setInterval(render, 30000);
     </script>

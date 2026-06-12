@@ -15,13 +15,18 @@ LOGGER = logging.getLogger(__name__)
 SCHEDULE_TZ = os.getenv("SCHEDULE_TZ", "America/Los_Angeles")
 SCHEDULE_HOUR = int(os.getenv("SCHEDULE_HOUR", "13"))
 SCHEDULE_MINUTE = int(os.getenv("SCHEDULE_MINUTE", "0"))
-CATCHUP_DAYS = int(os.getenv("CATCHUP_DAYS", os.getenv("BACKFILL_DAYS", "365")))
+CATCHUP_DAYS = int(os.getenv("CATCHUP_DAYS", os.getenv("BACKFILL_DAYS", "7")))
 
 BACKFILL_TABLES = {
     "deviation": "track_deviation",
     "liquidity": "track_liquidity",
     "ipo_heat": "track_ipo_heat",
     "volatility": "track_volatility",
+    "credit": "track_credit",
+    "concentration": "track_concentration",
+    "hot_sector": "track_hot_sector",
+    "term_structure": "track_term_structure",
+    "put_call": "track_put_call",
 }
 
 
@@ -40,6 +45,16 @@ def get_latest_table_dates() -> dict[str, date | None]:
         SELECT 'ipo_heat', max(date) FROM track_ipo_heat
         UNION ALL
         SELECT 'volatility', max(date) FROM track_volatility
+        UNION ALL
+        SELECT 'credit', max(date) FROM track_credit
+        UNION ALL
+        SELECT 'concentration', max(date) FROM track_concentration
+        UNION ALL
+        SELECT 'hot_sector', max(date) FROM track_hot_sector
+        UNION ALL
+        SELECT 'term_structure', max(date) FROM track_term_structure
+        UNION ALL
+        SELECT 'put_call', max(date) FROM track_put_call
         """
     )
     return {row["metric"]: row["max_date"] for row in rows}

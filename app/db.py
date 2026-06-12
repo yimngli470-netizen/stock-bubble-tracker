@@ -62,6 +62,74 @@ def init_tables():
             vix_sma_20 DOUBLE PRECISION
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS track_credit (
+            date DATE PRIMARY KEY,
+            hy_spread_pct DOUBLE PRECISION
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS track_concentration (
+            date DATE PRIMARY KEY,
+            smh_spy_ratio DOUBLE PRECISION,
+            smh_spy_dev_pct DOUBLE PRECISION,
+            qqq_qqqe_ratio DOUBLE PRECISION,
+            qqq_qqqe_dev_pct DOUBLE PRECISION
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS track_term_structure (
+            date DATE PRIMARY KEY,
+            vix_1m DOUBLE PRECISION,
+            vix_3m DOUBLE PRECISION,
+            vix_ratio DOUBLE PRECISION
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS track_margin_debt (
+            date DATE PRIMARY KEY,
+            debit_balances_billions DOUBLE PRECISION,
+            yoy_growth_pct DOUBLE PRECISION
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS track_put_call (
+            date DATE PRIMARY KEY,
+            total_pc_ratio DOUBLE PRECISION,
+            equity_pc_ratio DOUBLE PRECISION
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS track_hot_sector (
+            date DATE PRIMARY KEY,
+            sector TEXT,
+            dev_pct DOUBLE PRECISION
+        )
+        """,
+        """
+        ALTER TABLE track_ipo_heat ADD COLUMN IF NOT EXISTS ipo_rel_dev_pct DOUBLE PRECISION
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS track_fundamentals (
+            date DATE PRIMARY KEY,
+            erp_pct DOUBLE PRECISION,
+            multiple_expansion_pct DOUBLE PRECISION,
+            cape DOUBLE PRECISION,
+            cape_percentile DOUBLE PRECISION,
+            margins_pct DOUBLE PRECISION,
+            credit_gap_pct DOUBLE PRECISION
+        )
+        """,
+        # Native-cadence (monthly/quarterly) history for the slow fundamental
+        # metrics, so their charts show real steps instead of one flat daily line.
+        """
+        CREATE TABLE IF NOT EXISTS track_metric_history (
+            metric TEXT,
+            date DATE,
+            value DOUBLE PRECISION,
+            PRIMARY KEY (metric, date)
+        )
+        """,
     ]
 
     with get_conn() as conn:
