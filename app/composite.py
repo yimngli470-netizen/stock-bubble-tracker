@@ -154,7 +154,8 @@ DISCONNECT_SIGNALS = [
     # Corporate profits / GDP; record margins make trailing P/E deceptively cheap
     dict(key="margins", label="Profit Margins (CP/GDP)", section="Fundamental Disconnect",
          table="track_fundamentals", field="margins_pct", weight=15, calm=9.0, extreme=13.0),
-    # Simplified BIS credit-to-GDP gap; the debt-bubble detector (2007, Japan 1990)
+    # Simplified BIS-style credit-to-GDP gap (Fed Z.1: households + nonfinancial
+    # business); the debt-bubble detector (2007, Japan 1990)
     dict(key="credit_gap", label="Credit-to-GDP Gap", section="Fundamental Disconnect",
          table="track_fundamentals", field="credit_gap_pct", weight=10, calm=0.0, extreme=10.0),
 ]

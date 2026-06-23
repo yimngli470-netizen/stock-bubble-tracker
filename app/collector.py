@@ -845,11 +845,21 @@ def run_fundamentals(run_date: datetime | None = None) -> None:
 
     credit_gap = None
     try:
-        # Simplified BIS-style gap: credit/GDP ratio minus its trailing 10-year
-        # (40-quarter) average (BIS proper uses a one-sided HP-filter trend)
-        credit = web.DataReader(
-            "CRDQUSAPABIS", "fred", _HISTORY_START - timedelta(days=20 * 366), target_date
+        # Simplified BIS-style gap: total private non-financial credit / GDP minus
+        # its trailing 10-year (40-quarter) average (BIS proper uses a one-sided
+        # HP-filter trend). Sourced from the Fed Z.1 accounts — households
+        # (CMDEBT) + nonfinancial business (BCNSDODNS), both in $ millions — rather
+        # than the BIS series CRDQUSAPABIS, which lags ~a quarter longer. Z.1
+        # publishes ~10 weeks after quarter-end and keeps the household/mortgage
+        # leverage channel that defined 2007. Scale differs from BIS (2007 gap
+        # peaks ~+18 vs ~+24) but both saturate past the extreme=10 anchor.
+        cm = web.DataReader(
+            "CMDEBT", "fred", _HISTORY_START - timedelta(days=20 * 366), target_date
         ).dropna().iloc[:, 0]
+        biz = web.DataReader(
+            "BCNSDODNS", "fred", _HISTORY_START - timedelta(days=20 * 366), target_date
+        ).dropna().iloc[:, 0]
+        credit = (cm + biz) / 1000.0  # $ millions -> $ billions, to match GDP units
         if gdp is not None:
             ratio = (pd.DataFrame({"credit": credit, "gdp": gdp}).dropna().eval("credit / gdp * 100"))
             gap_series = (ratio - ratio.rolling(40, min_periods=40).mean()).dropna()
