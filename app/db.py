@@ -130,6 +130,19 @@ def init_tables():
             PRIMARY KEY (metric, date)
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS track_crypto (
+            date DATE NOT NULL,
+            asset TEXT NOT NULL,
+            close DOUBLE PRECISION,
+            ma_120 DOUBLE PRECISION,
+            deviation_pct DOUBLE PRECISION,
+            vol_20_pct DOUBLE PRECISION,
+            regime TEXT,
+            overlay_weight_pct DOUBLE PRECISION,
+            PRIMARY KEY (date, asset)
+        )
+        """,
     ]
 
     with get_conn() as conn:

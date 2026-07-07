@@ -410,6 +410,7 @@
       <div class="page-tabs" aria-label="Pages">
         <button type="button" data-page="euphoria">Euphoria–Panic Index</button>
         <button type="button" data-page="disconnect">Fundamental Disconnect Index</button>
+        <button type="button" data-page="crypto">Crypto Regime</button>
       </div>
       <div class="toolbar">
         <div id="status" class="sub">Loading...</div>
@@ -644,8 +645,10 @@
           "Measures crowd sentiment and positioning — manic euphoria at the top of the scale, capitulation panic at the bottom. Pair this gauge with fundamentals.",
         disconnect:
           "The second axis: is the price backed by earnings? Sentiment can be euphoric for good reason — this index measures how far prices have detached from the cash flows underneath.",
+        crypto:
+          "BTC/ETH trend regime — hold while the daily close is above its 120-day MA, cash below (walk-forward validated). Signals execute at the next daily close; this page is the live state of that rule.",
       };
-      let currentPage = location.hash === "#disconnect" ? "disconnect" : "euphoria";
+      let currentPage = location.hash === "#disconnect" ? "disconnect" : (location.hash === "#crypto" ? "crypto" : "euphoria");
       const pageButtons = document.querySelectorAll("[data-page]");
       const pageSub = document.getElementById("page-sub");
 
@@ -701,8 +704,101 @@
         "Fundamental Disconnect": "separate index — is the price backed by earnings?",
       };
 
+      function createDualChart(canvasId, dates, seriesA, seriesB) {
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+        if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+        if (!dates.length) {
+          ctx.parentElement.innerHTML = '<div style="text-align:center;padding:20px;color:#999;">No historical data yet</div>';
+          return;
+        }
+        chartInstances[canvasId] = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: dates,
+            datasets: [
+              { label: seriesA.label, data: seriesA.values, borderColor: "#0b6bcb",
+                backgroundColor: "#0b6bcb10", tension: 0.3, fill: true, pointRadius: 0, pointHoverRadius: 3 },
+              { label: seriesB.label, data: seriesB.values, borderColor: "#d97706",
+                borderDash: [6, 4], tension: 0.3, fill: false, pointRadius: 0, pointHoverRadius: 3 },
+            ],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: true, labels: { boxWidth: 18, font: { size: 10 } } },
+                       tooltip: { mode: "index", intersect: false } },
+            scales: { x: { display: false }, y: { display: true, grid: { color: "#f0f0f0" }, ticks: { font: { size: 10 } } } },
+            interaction: { mode: "nearest", axis: "x", intersect: false },
+          },
+        });
+      }
+
+      const cryptoNames = { "BTC-USD": "Bitcoin", "ETH-USD": "Ethereum" };
+      async function renderCrypto() {
+        const latest = await (await fetch("/crypto")).json();
+        const assets = Object.keys(cryptoNames);
+        const histories = {};
+        for (const a of assets) {
+          const r = await fetch(`/crypto/history/${a}`);
+          histories[a] = r.ok ? await r.json() : [];
+        }
+        Object.keys(chartInstances).forEach((id) => { chartInstances[id].destroy(); delete chartInstances[id]; });
+
+        const strategyNote = `
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-head"><div class="card-title">The rule (walk-forward validated)</div></div>
+            <div class="meta" style="line-height:1.6;">
+              <b>Hold while daily close &gt; MA120; move to cash on the cross below; act at the next daily close.</b>
+              Out-of-sample (blind years): BTC Sharpe 1.29 vs 0.93 buy&amp;hold (8y), ETH 0.72-0.77 vs 0.60 (6y); max drawdown roughly halved.
+              It wins bear years, lags V-recoveries — hold through that. Optional sizing: weight = min(100%, 50% / 20d-vol).
+              Signals fire ~5-7×/yr per asset. Data updates once daily with the worker run. 仅供研究，不构成投资建议。
+            </div>
+          </div>`;
+
+        const cardHtml = (a) => {
+          const row = latest[a];
+          if (!row) return `<div class="card"><div class="card-title">${cryptoNames[a]}</div><div class="meta">No data yet — worker hasn't run.</div></div>`;
+          const isLong = row.regime === "LONG";
+          const badge = `<span style="display:inline-block;padding:3px 12px;border-radius:12px;font-weight:700;font-size:13px;color:#fff;background:${isLong ? "#1d8f4f" : "#64748b"};">${isLong ? "LONG — hold" : "CASH — stand aside"}</span>`;
+          const hist = histories[a];
+          let lastCross = null;
+          for (let i = hist.length - 1; i > 0; i--) {
+            if (hist[i].regime !== hist[i - 1].regime) { lastCross = hist[i]; break; }
+          }
+          return `
+            <div class="card">
+              <div class="card-head">
+                <div class="card-title">${cryptoNames[a]} <span style="color:#94a3b8;font-weight:400;">${a}</span></div>
+                ${badge}
+              </div>
+              <div class="value">$${Number(row.close).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+              <div class="meta">
+                MA120 $${Number(row.ma_120).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                · distance <b style="color:${row.deviation_pct >= 0 ? "#1d8f4f" : "#c73030"};">${Number(row.deviation_pct) >= 0 ? "+" : ""}${Number(row.deviation_pct).toFixed(1)}%</b>
+                · 20d vol ${hasNumber(row.vol_20_pct) ? Number(row.vol_20_pct).toFixed(0) + "%" : "—"}
+                · overlay weight ${hasNumber(row.overlay_weight_pct) ? Number(row.overlay_weight_pct).toFixed(0) + "%" : "—"}<br>
+                ${lastCross ? `Last signal: <b>${lastCross.regime === "LONG" ? "BUY" : "SELL"}</b> on ${lastCross.date}` : "No regime change in stored history"}
+                · as of ${row.date}
+              </div>
+              <div class="line" style="height:220px;">
+                <canvas id="chart-crypto-${a}"></canvas>
+              </div>
+            </div>`;
+        };
+
+        cards.innerHTML = strategyNote + `<div class="grid">${assets.map(cardHtml).join("")}</div>`;
+        for (const a of assets) {
+          const rows = cryptoRange(histories[a]);
+          createDualChart(`chart-crypto-${a}`, rows.map((x) => x.date),
+            { label: "Close", values: rows.map((x) => Number(x.close)) },
+            { label: "MA120", values: rows.map((x) => Number(x.ma_120)) });
+        }
+        status.textContent = `Last refresh: ${new Date().toLocaleString()}`;
+      }
+
       async function render() {
         try {
+          if (currentPage === "crypto") { await renderCrypto(); return; }
           const r = await fetch("/latest");
           if (!r.ok) throw new Error("API unavailable");
           const data = await r.json();
@@ -1142,14 +1238,14 @@
       pageButtons.forEach((button) => {
         button.addEventListener("click", () => {
           currentPage = button.dataset.page;
-          location.hash = currentPage === "disconnect" ? "#disconnect" : "#euphoria";
+          location.hash = currentPage === "disconnect" ? "#disconnect" : (currentPage === "crypto" ? "#crypto" : "#euphoria");
           updatePageButtons();
           render();
         });
       });
 
       window.addEventListener("hashchange", () => {
-        const page = location.hash === "#disconnect" ? "disconnect" : "euphoria";
+        const page = location.hash === "#disconnect" ? "disconnect" : (location.hash === "#crypto" ? "crypto" : "euphoria");
         if (page !== currentPage) {
           currentPage = page;
           updatePageButtons();

@@ -99,6 +99,27 @@ def composite_history() -> list[dict]:
     return history()
 
 
+CRYPTO_ASSETS = {"BTC-USD", "ETH-USD"}
+
+
+@app.get("/crypto")
+def crypto_latest() -> dict:
+    out = {}
+    for asset in sorted(CRYPTO_ASSETS):
+        rows = fetch_all(
+            "SELECT * FROM track_crypto WHERE asset = %s ORDER BY date DESC LIMIT 1", (asset,))
+        out[asset] = rows[0] if rows else None
+    return out
+
+
+@app.get("/crypto/history/{asset}")
+def crypto_history(asset: str) -> list[dict]:
+    if asset not in CRYPTO_ASSETS:
+        raise HTTPException(status_code=404, detail="Unknown asset")
+    return fetch_all(
+        "SELECT * FROM track_crypto WHERE asset = %s ORDER BY date ASC", (asset,))
+
+
 @app.get("/latest")
 def latest() -> dict:
     out = {}

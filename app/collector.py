@@ -911,6 +911,70 @@ def run_fundamentals(run_date: datetime | None = None) -> None:
     )
 
 
+
+# --- Crypto regime (BTC/ETH MA120 trend filter + vol) --------------------------
+# Strategy source: crypto-ta-lab walk-forward validation (2026-07-07): hold while
+# daily close > MA120, exit on cross below; optional sizing min(1, 50%/vol20).
+# Full-upsert style like run_margin_debt: every live run recomputes and upserts
+# ~13 months of daily rows (crypto trades 7 days/week — its calendar is NOT the
+# NDX trading calendar, so it stays out of the per-date backfill machinery).
+CRYPTO_ASSETS = ("BTC-USD", "ETH-USD")
+CRYPTO_MA_N = 120
+CRYPTO_VOL_N = 20
+CRYPTO_TARGET_VOL = 0.50
+
+
+def run_crypto(run_date: datetime | None = None) -> None:
+    if run_date:
+        return  # full-history upsert on every live run; per-date backfill unnecessary
+
+    today = datetime.now().date()
+    start = today - timedelta(days=560)   # 120d MA warmup + ~13 months of chart rows
+    query = """
+        INSERT INTO track_crypto (date, asset, close, ma_120, deviation_pct,
+                                  vol_20_pct, regime, overlay_weight_pct)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (date, asset) DO UPDATE
+        SET close = EXCLUDED.close,
+            ma_120 = EXCLUDED.ma_120,
+            deviation_pct = EXCLUDED.deviation_pct,
+            vol_20_pct = EXCLUDED.vol_20_pct,
+            regime = EXCLUDED.regime,
+            overlay_weight_pct = EXCLUDED.overlay_weight_pct
+    """
+
+    for asset in CRYPTO_ASSETS:
+        df = yf.Ticker(asset).history(start=start, end=today + timedelta(days=1))
+        if df.empty:
+            LOGGER.warning("No %s data available", asset)
+            continue
+        df = _drop_missing_market_values(df, "crypto", ["Close"])
+        closes = df["Close"].astype(float)
+        ma = closes.rolling(window=CRYPTO_MA_N).mean()
+        vol = closes.pct_change().rolling(window=CRYPTO_VOL_N).std() * (365 ** 0.5)
+        rows = []
+        for idx in range(len(df)):
+            if not _has_finite_values([ma.iloc[idx]]):
+                continue                     # MA warmup window
+            c, m = float(closes.iloc[idx]), float(ma.iloc[idx])
+            v = float(vol.iloc[idx]) if _has_finite_values([vol.iloc[idx]]) else None
+            regime = "LONG" if c > m else "CASH"
+            weight = round(min(1.0, CRYPTO_TARGET_VOL / v) * 100, 1) if v else None
+            rows.append((df.index[idx].date(), asset, c, m,
+                         round((c - m) / m * 100, 2),
+                         round(v * 100, 1) if v is not None else None,
+                         regime, weight))
+        if not rows:
+            LOGGER.warning("No computable %s rows (insufficient history?)", asset)
+            continue
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(query, rows)
+            conn.commit()
+        LOGGER.info("Upserted %d crypto rows for %s (latest: %s %s)",
+                    len(rows), asset, rows[-1][0], rows[-1][6])
+
+
 def run_all(run_date: datetime | None = None) -> None:
     init_tables()
     jobs = [
@@ -927,6 +991,7 @@ def run_all(run_date: datetime | None = None) -> None:
         ("margin_debt", run_margin_debt),
         ("put_call", run_put_call),
         ("fundamentals", run_fundamentals),
+        ("crypto", run_crypto),
     ]
 
     for name, job in jobs:
