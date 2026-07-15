@@ -4,7 +4,7 @@ import io
 import logging
 import math
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 import pandas_datareader.data as web
@@ -949,6 +949,13 @@ def run_crypto(run_date: datetime | None = None) -> None:
             LOGGER.warning("No %s data available", asset)
             continue
         df = _drop_missing_market_values(df, "crypto", ["Close"])
+        # Crypto's UTC day is still in progress when the 13:00 PT run fires — that
+        # bar's "close" is just the current price and can flash a false MA cross.
+        # Judge on completed closes only (self-heals next run regardless).
+        utc_today = datetime.now(timezone.utc).date()
+        df = df[[d.date() < utc_today for d in df.index]]
+        if df.empty:
+            continue
         closes = df["Close"].astype(float)
         ma = closes.rolling(window=CRYPTO_MA_N).mean()
         vol = closes.pct_change().rolling(window=CRYPTO_VOL_N).std() * (365 ** 0.5)
